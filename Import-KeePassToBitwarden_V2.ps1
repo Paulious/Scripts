@@ -44,8 +44,179 @@ if (-not (Test-KeePassPath -Path $KeePassExePath)) {
 }
 
 
+[CmdletBinding(SupportsShouldProcess = $true)]
+
+param(
+    [Parameter(Mandatory = $false)]
+    [string]$KeePassDbPath,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateScript({ Test-Path -Path $_ -PathType Leaf })]
+    [string]$KeePassExePath = 'C:\Program Files\KeePass Password Safe 2\KeePass.exe'
+)
+
+$paths = @(
+    "C:\Program Files\KeePass Password Safe 2\KeePass.exe",
+    "C:\Program Files (x86)\KeePass Password Safe 2x\KeePass.exe"
+)
+
+# Function to check if a path exists
+function Test-KeePassPath {
+    param (
+        [string]$Path
+    )
+    if (Test-Path $Path) {
+        return $true
+    } else {
+        return $false
+    }
+}
+
+# Check if the provided KeePassExePath exists
+if (-not (Test-KeePassPath -Path $KeePassExePath)) {
+    foreach ($path in $paths) {
+        if (Test-KeePassPath -Path $path) {
+            $KeePassExePath = $path
+            Write-Output "KeePass found at $KeePassExePath"
+            break
+        }
+    }
+}
+
+if (-not (Test-KeePassPath -Path $KeePassExePath)) {
+    Write-Output "KeePass not found in the specified paths."
+} else {
+    Write-Output "Using KeePass executable at $KeePassExePath"
+}
+
+
 # --- Prerequisite Checks ---
 $ErrorActionPreference = 'Stop' # Use Stop for prerequisite checks too
+
+# Check for bw.exe alongside the script
+[CmdletBinding(SupportsShouldProcess = $true)]
+
+param(
+    [Parameter(Mandatory = $false)]
+    [string]$KeePassDbPath,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateScript({ Test-Path -Path $_ -PathType Leaf })]
+    [string]$KeePassExePath = 'C:\Program Files\KeePass Password Safe 2\KeePass.exe'
+)
+
+$paths = @(
+    "C:\Program Files\KeePass Password Safe 2\KeePass.exe",
+    "C:\Program Files (x86)\KeePass Password Safe 2x\KeePass.exe"
+)
+
+# Function to check if a path exists
+function Test-KeePassPath {
+    param (
+        [string]$Path
+    )
+    if (Test-Path $Path) {
+        return $true
+    } else {
+        return $false
+    }
+}
+
+# Check if the provided KeePassExePath exists
+if (-not (Test-KeePassPath -Path $KeePassExePath)) {
+    foreach ($path in $paths) {
+        if (Test-KeePassPath -Path $path) {
+            $KeePassExePath = $path
+            Write-Output "KeePass found at $KeePassExePath"
+            break
+        }
+    }
+}
+
+if (-not (Test-KeePassPath -Path $KeePassExePath)) {
+    Write-Output "KeePass not found in the specified paths."
+    exit 1
+} else {
+    Write-Output "Using KeePass executable at $KeePassExePath"
+}
+
+# --- Prerequisite Checks ---
+$ErrorActionPreference = 'Stop' # Use Stop for prerequisite checks too
+
+# Check for bw.exe alongside the script
+# $PSScriptRoot is the directory containing the script file
+$scriptDir = $PSScriptRoot
+$bwExePath = Join-Path -Path $scriptDir -ChildPath "bw.exe"
+if (-not (Test-Path -Path $bwExePath -PathType Leaf)) {
+    throw "Bitwarden CLI executable 'bw.exe' not found in the script directory: $scriptDir. Please place bw.exe alongside the script."
+}
+Write-Verbose "Using Bitwarden CLI executable: $bwExePath"
+
+# --- Script Main Logic ---
+# Variables for cleanup scope
+$plainTextPass = $null
+$pd = $null
+$xmlPath = $null
+$keepassInitialized = $false
+
+try {
+    # --- Initialize KeePass Environment ---
+    Write-Verbose "Using KeePass executable path: $KeePassExePath"
+    if (-not (Test-Path -Path $KeePassExePath -PathType Leaf)) {
+        throw "KeePass.exe not found at the specified path: $KeePassExePath. Please verify the path or provide the correct one using -KeePassExePath."
+    }
+
+    try {
+        Write-Verbose "Attempting to load KeePass assembly: $KeePassExePath"
+        [System.Reflection.Assembly]::LoadFrom($KeePassExePath) | Out-Null
+        Write-Verbose "KeePass assembly loaded. Initializing KeePass environment..."
+        [KeePass.Program]::CommonInitialize()
+        $keepassInitialized = $true
+        Write-Verbose "KeePass environment initialized successfully."
+    }
+    catch {
+        Write-Error "Failed during KeePass assembly load or initialization from '$KeePassExePath'. Ensure KeePassLib.dll exists (see workaround). Error: $($_.Exception.ToString())"
+        exit 1 # Use exit here as it's a fundamental failure before main ops
+    }
+
+    # Prompt user for KeePass database path if not provided
+    if ([string]::IsNullOrWhiteSpace($KeePassDbPath)) {
+        $KeePassDbPath = Read-Host "Please enter the path to your KeePass database file"
+    }
+
+    if ([string]::IsNullOrWhiteSpace($KeePassDbPath)) {
+        throw "KeePass database path not provided."
+    }
+
+    if (-not (Test-Path -Path $KeePassDbPath -PathType Leaf)) {
+        throw "KeePass database file not found at: $KeePassDbPath"
+    }
+
+    Write-Verbose "Using KeePass database: $KeePassDbPath"
+}
+catch {
+    Write-Error "An error occurred: $_"
+    exit 1
+}
+
+# --- Additional Script Logic ---
+# Place your additional script logic here
+
+# Example of additional logic:
+try {
+    # Your additional script logic here
+    Write-Verbose "Starting additional script logic..."
+    # Example: Load KeePass database
+    $pd = [KeePassLib.PwDatabase]::new()
+    $ioConnInfo = [KeePassLib.Serialization.IOConnectionInfo]::new()
+    $ioConnInfo.Path = $KeePassDbPath
+    $pd.Open($ioConnInfo, $true)
+    Write-Verbose "KeePass database loaded successfully."
+}
+catch {
+    Write-Error "An error occurred during additional script logic: $_"
+    exit 1
+}
 
 # Check for bw.exe alongside the script
 # $PSScriptRoot is the directory containing the script file
