@@ -52,6 +52,10 @@ version number (in AD and GPT.INI) so clients see the change. Everything is done
 
 See `printers-example.csv`.
 
+A sheet laid out as `Order, Printer Name, Share Path, Security Group` also works as it is.
+Save it from Excel as **CSV UTF-8** and point `-CsvPath` at it. The columns are mapped for you
+and the printers go into the GPO in the `Order` given.
+
 ## Things to know
 
 - The CSV is the whole list. Any printer in the GPO that is not in the CSV is removed on import.

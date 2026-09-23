@@ -24,7 +24,8 @@
                  pick up the change. The CSV becomes the full list of printers in
                  the GPO, anything not in the CSV is removed from the GPO.
 
-    CSV columns:
+    CSV columns (a sheet with 'Order', 'Printer Name', 'Share Path' and 'Security Group'
+    columns also works, the names are mapped for you and rows are kept in Order):
       Name      Display name of the item in GPMC. Leave blank to use the share name.
       Path      UNC path to the printer, eg \\NEWPRINT01\Finance-MFD
       Action    U (Update - default), C (Create), R (Replace) or D (Delete)
@@ -278,6 +279,31 @@ Function Export-PrintServerTemplate {
     Write-Host "Check the Groups and OldPath columns before importing." -ForegroundColor Yellow
 }
 
+Function ConvertTo-StandardRow {
+    # Lets the import take a sheet with other common column names, eg one saved straight from Excel
+    # with 'Printer Name', 'Share Path' and 'Security Group' columns
+    Process {
+        $Aliases = @{
+            'Printer Name'   = 'Name'
+            'PrinterName'    = 'Name'
+            'Share Path'     = 'Path'
+            'SharePath'      = 'Path'
+            'UNC'            = 'Path'
+            'Security Group' = 'Groups'
+            'SecurityGroup'  = 'Groups'
+            'Group'          = 'Groups'
+            'Old Path'       = 'OldPath'
+        }
+        $Out = [ordered]@{}
+        ForEach ($Prop in $_.PSObject.Properties) {
+            $Key = $Prop.Name.Trim()
+            If ($Aliases.ContainsKey($Key)) { $Key = $Aliases[$Key] }
+            $Out[$Key] = $Prop.Value
+        }
+        [pscustomobject]$Out
+    }
+}
+
 Function New-SharedPrinterNode {
     Param(
         [xml]$Doc,
@@ -335,8 +361,13 @@ Function New-SharedPrinterNode {
 }
 
 Function Import-GpoPrinters {
-    $Rows = @(Import-Csv -Path $CsvPath)
+    $Rows = @(Import-Csv -Path $CsvPath | ConvertTo-StandardRow)
     If ($Rows.Count -eq 0) { Throw "$CsvPath has no rows" }
+
+    # If there is an Order column, keep that order in the GPO
+    If ($Rows[0].PSObject.Properties.Name -contains 'Order') {
+        $Rows = @($Rows | Sort-Object { [int]("0" + "$($_.Order)".Trim()) })
+    }
 
     $Pdc = Get-PdcEmulator
     $Gpo = Get-GPO -Name $GpoName -Server $Pdc
