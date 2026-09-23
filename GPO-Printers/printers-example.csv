@@ -1,0 +1,4 @@
+Name,Path,Action,Default,Groups,OldPath,Location,Comment
+Finance MFD,\\NEWPRINT01\Finance-MFD,U,0,PRN-Finance-MFD,\\OLDPRINT01\Finance-MFD,Floor 2,
+HR Colour,\\NEWPRINT01\HR-Colour,U,0,PRN-HR;PRN-Managers,\\OLDPRINT01\HR-Colour,Floor 1,
+Reception,\\NEWPRINT01\Reception,U,1,PRN-Reception,\\OLDPRINT01\Reception,Ground floor,
