@@ -24,7 +24,7 @@ def _further_data(case: Case) -> list[str]:
         out.append(r"Intune logs from C:\ProgramData\Microsoft\IntuneManagementExtension\Logs (IntuneManagementExtension.log and AppWorkload.log) covering the failure time.")
     if types & {"patchmypc_scriptrunner"} and not types & {"msi_verbose", "dell_dup"}:
         out.append(r"The installer's own log from C:\ProgramData\PatchMyPCInstallLogs for the failing app.")
-    if not types & {"msi_verbose", "dell_dup", "psadt"} and not types & {"patchmypc_scriptrunner"}:
+    if not types & {"msi_verbose", "dell_dup", "psadt", "intune_ime", "dsregcmd"} and not types & {"patchmypc_scriptrunner"}:
         out.append(r"A verbose MSI log (msiexec /i <package> /l*v C:\Temp\install.log) from a failing device.")
     out.append("The exact app name, version, assignment type and install context (System or User) from the Intune portal.")
     return out
@@ -62,13 +62,13 @@ def build_heuristic(case: Case, *, provider: str = "none", note: str | None = No
     base = compute_confidence(top, case.findings, case.links, pattern.weight if pattern else 0.25)
 
     near = [f for f in case.findings if f.id != top.id and f.file == top.file and abs(f.first_line - top.first_line) <= 60]
-    outcomes = [f for f in case.findings if f.role == Role.symptom and f.id != top.id]
+    outcomes = [f for f in case.findings if f.role == Role.symptom and f.id != top.id and f.file == top.file]
     contributing = [f"{f.title} ({f.file}:{f.first_line})" for f in near if f.role == Role.cause][:5]
 
     where = f"{top.file}:{top.first_line}"
     reasoning = [f"The strongest signal is '{top.title}' at {where}."]
     if not outcomes:
-        reasoning.append("No failed install or failing exit code was recorded, so this is a problem worth fixing rather than proof of a failed deployment.")
+        reasoning.append("Nothing in the same log ties a failed install or failing exit code to it, so treat it as a problem worth fixing rather than proof of a failed deployment.")
     if outcomes:
         o = outcomes[0]
         reasoning.append(f"The outcome matches: {o.title} at {o.file}:{o.first_line}.")
@@ -87,9 +87,9 @@ def build_heuristic(case: Case, *, provider: str = "none", note: str | None = No
     else:
         # Nothing in the logs says a deployment actually failed, so don't present this as a failure.
         summary = (
-            f"{n_files} log file{'s' if n_files != 1 else ''} analysed. No failed install, failing exit code or failed "
-            f"deployment outcome was found, so these logs may show a healthy deployment. The most notable problem in them is: "
-            f"{top.title}. {top.explanation}"
+            f"{n_files} log file{'s' if n_files != 1 else ''} analysed. Nothing in the logs ties a failed install, failing exit code or "
+            f"failed deployment to the most notable problem, so this may be a script or configuration defect rather than a failed "
+            f"deployment. The problem is: {top.title}. {top.explanation}"
         )
 
     verification = list(pattern.verification) if pattern and pattern.verification else [

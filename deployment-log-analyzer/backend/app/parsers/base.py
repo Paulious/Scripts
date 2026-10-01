@@ -61,7 +61,22 @@ _LEVEL_WORDS = [
 ]
 
 
+_EXPLICIT_LEVEL = re.compile(r"^\s*(?:\d{4}-\d\d-\d\d[ T]\d\d:\d\d:\d\d(?:[.,]\d+)?[,\s]+)(info|information|debug|trace|warning|warn|error|fatal)\b", re.I)
+
+
+def explicit_level(text: str) -> str | None:
+    """CBS, setupact and many other logs print the level right after the timestamp. When it is there,
+    trust it: an Info line that says "Failed to ..." is the log describing something it handled."""
+    m = _EXPLICIT_LEVEL.match(text)
+    if not m:
+        return None
+    word = m.group(1).lower()
+    return ERROR if word in ("error", "fatal") else WARNING if word in ("warning", "warn") else INFO
+
+
 def guess_level(text: str) -> str:
+    if (lvl := explicit_level(text)) is not None:
+        return lvl
     for rx, level in _LEVEL_WORDS:
         if rx.search(text):
             return level

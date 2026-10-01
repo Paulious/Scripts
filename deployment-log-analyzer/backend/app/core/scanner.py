@@ -51,7 +51,7 @@ def scan_entries(scan: FileScan, lib: PatternLibrary) -> None:
     table, residual = lib.prefilter(scan.log_type)
     order = {p.id: i for i, p in enumerate(lib.for_log_type(scan.log_type))}
     any_noise = lib.suppress_any.search
-    claimed: set[tuple[int, Role]] = set()
+    claimed: set[tuple[int, Role, str]] = set()
     for idx, entry in enumerate(scan.entries):
         text = entry.text
         if not text.strip():
@@ -79,7 +79,7 @@ def scan_entries(scan: FileScan, lib: PatternLibrary) -> None:
 
         hit_any = False
         for p in sorted(candidates.values(), key=lambda p: order[p.id]):
-            key = (idx, p.role)
+            key = (idx, p.role, p.category)
             if key in claimed:
                 continue
             ok, detail = p.match(text)
@@ -121,7 +121,8 @@ def build_window(scan: FileScan, match_lines: set[int], anchor: int, settings: S
         raw = scan.lines[n - scan.offset - 1]
         lines.append(EvidenceLine(
             n=n,
-            text=_trim(raw, settings.max_line_chars),
+            # A matched line keeps much more text: the useful part of a long JSON or script-output line is often deep inside it.
+            text=_trim(raw, settings.max_line_chars * 4 if n in match_lines else settings.max_line_chars),
             match=n in match_lines,
             anchor=n == anchor,
             noise=scan.parser.is_noise(raw),

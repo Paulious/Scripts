@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from app.models import AnalysisResult, EvidenceWindow, Finding
 
-FULL_EVIDENCE_FOR = 3     # top findings get the whole +/-100 line window
+FULL_EVIDENCE_FOR = 3     # top findings get a wide window (the app itself shows the full +/-100 lines)
+FULL_CONTEXT = 40
 SHORT_CONTEXT = 6         # everything else gets a few lines around the match
 
 
@@ -41,9 +42,10 @@ def _evidence(f: Finding, full: bool, shown: dict[str, list[tuple[int, int, str]
             parts.append(f"`{w.file}` around line {w.anchor_line}: same region as {prior} above.")
             continue
         shown.setdefault(w.file, []).append((w.start_line, w.end_line, f.id))
-        lo, hi = w.start_line, w.end_line
+        lo = max(w.start_line, w.anchor_line - FULL_CONTEXT) if full else w.start_line
+        hi = min(w.end_line, w.anchor_line + FULL_CONTEXT) if full else w.end_line
         label = f"`{w.file}` lines {lo}-{hi}" if full else f"`{w.file}` around line {w.anchor_line}"
-        parts.append(f"{label}\n\n{_window_text(w, None if full else SHORT_CONTEXT)}")
+        parts.append(f"{label}\n\n{_window_text(w, FULL_CONTEXT if full else SHORT_CONTEXT)}")
     return "\n\n".join(parts)
 
 

@@ -144,3 +144,10 @@ def test_real_intune_routine_lines_are_not_flagged():
 def test_aadsts_code_is_explained():
     notes = get_library().explain_codes("AADSTS700016: Application not found")
     assert notes
+
+
+def test_explicit_log_level_beats_words_in_the_message():
+    from app.parsers.base import ERROR, INFO, explicit_level
+    assert explicit_level("2026-10-01 11:34:30, Info                  CBS    Failed to open package [HRESULT = 0x800f0805]") == INFO
+    assert explicit_level("2026-10-01 11:34:30, Error                 CBS    Failed to open package") == ERROR
+    assert explicit_level("something failed") is None

@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from datetime import datetime
 
-from .base import ERROR, INFO, WARNING, LogEntry, LogParser, ParsedLog, guess_level
+from .base import ERROR, INFO, WARNING, LogEntry, LogParser, ParsedLog, explicit_level, guess_level
 
 _TS_PATTERNS = [
     (re.compile(r"(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})"), "%Y-%m-%d %H:%M:%S"),
@@ -93,7 +93,10 @@ class GenericTextParser(LogParser):
                 continue
             ts = sniff_timestamp(line) or last_ts
             last_ts = ts
-            if _ERR.search(line) and not _BENIGN.search(line):
+            level = explicit_level(line)
+            if level is not None:
+                pass
+            elif _ERR.search(line) and not _BENIGN.search(line):
                 level = ERROR
             elif re.search(r"\bwarn(ing)?\b", line, re.I):
                 level = WARNING
