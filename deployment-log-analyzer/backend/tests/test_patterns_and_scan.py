@@ -120,3 +120,27 @@ def test_llm_cannot_inflate_confidence_beyond_cap():
     assert scoring.blend_with_llm(base, 100).score == 60
     assert scoring.blend_with_llm(base, None).score == 50
     assert scoring.blend_with_llm(base, 10).score == 34
+
+
+def _hits(pattern_id, line):
+    p = next(p for p in get_library().patterns if p.id == pattern_id)
+    return [m for rx in p.regex if (m := re.search(rx, line, re.I))]
+
+
+def test_real_intune_lines_entra_app_and_script_error_stream():
+    line = "Application with identifier '1659b7df-78bd-4907-81bc-717b5890bd10' was not found in the directory"
+    hit = _hits("entra-app-not-found", line)
+    assert hit and "1659b7df" in (hit[0].groupdict().get("detail") or "")
+    err = "[HS] Detect error even if exit code is 0, error = Get-ItemProperty : Cannot find path 'HKCU:\\SOFTWARE\\x'"
+    assert _hits("hs-detect-error-stream", err)
+
+
+def test_real_intune_routine_lines_are_not_flagged():
+    assert not _hits("intune-timeout", "script exceeded the max run count 1, skipping")
+    assert not _hits("cbs-hresult", "2024-01-01 10:00:00, Info                  CBS    Failed to x [HRESULT = 0x800f0805]")
+    assert _hits("cbs-hresult", "2024-01-01 10:00:00, Error                 CBS    Failed to x [HRESULT = 0x800f0805]")
+
+
+def test_aadsts_code_is_explained():
+    notes = get_library().explain_codes("AADSTS700016: Application not found")
+    assert notes

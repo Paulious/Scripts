@@ -24,6 +24,7 @@ from app.patterns.literals import required_literals
 
 LIBRARY_DIR = Path(__file__).parent / "library"
 _HEX = re.compile(r"\b0x[0-9A-Fa-f]{8}\b")
+_AADSTS = re.compile(r"AADSTS(\d{4,7})")
 _MSI_CODE = re.compile(r"(?:Error |status: |error code |returning |code )(\d{4})\b")
 
 
@@ -174,6 +175,10 @@ class PatternLibrary:
             meaning = self.codes.get("hresult", {}).get(hx.upper().replace("0X", "0x"))
             if meaning:
                 found[hx.upper().replace("0X", "0x")] = meaning
+        for num in _AADSTS.findall(text):
+            meaning = self.codes.get("aadsts", {}).get(num)
+            if meaning:
+                found[f"AADSTS{num}"] = meaning
         for num in _MSI_CODE.findall(text):
             meaning = self.codes.get("msi", {}).get(num)
             if meaning:

@@ -67,6 +67,8 @@ def build_heuristic(case: Case, *, provider: str = "none", note: str | None = No
 
     where = f"{top.file}:{top.first_line}"
     reasoning = [f"The strongest signal is '{top.title}' at {where}."]
+    if not outcomes:
+        reasoning.append("No failed install or failing exit code was recorded, so this is a problem worth fixing rather than proof of a failed deployment.")
     if outcomes:
         o = outcomes[0]
         reasoning.append(f"The outcome matches: {o.title} at {o.file}:{o.first_line}.")
@@ -76,11 +78,19 @@ def build_heuristic(case: Case, *, provider: str = "none", note: str | None = No
         reasoning.append("Related logs: " + ", ".join(top.related_files[:3]) + ".")
 
     when = f" between {top.first_timestamp} and {top.last_timestamp}" if top.first_timestamp and top.last_timestamp and top.first_timestamp != top.last_timestamp else ""
-    summary = (
-        f"{n_files} log file{'s' if n_files != 1 else ''} analysed. Most likely cause: {top.title}. "
-        f"{top.explanation} "
-        f"It shows up in {top.attempts} separate attempt{'s' if top.attempts != 1 else ''}{when}."
-    )
+    if outcomes:
+        summary = (
+            f"{n_files} log file{'s' if n_files != 1 else ''} analysed. Most likely cause: {top.title}. "
+            f"{top.explanation} "
+            f"It shows up in {top.attempts} separate attempt{'s' if top.attempts != 1 else ''}{when}."
+        )
+    else:
+        # Nothing in the logs says a deployment actually failed, so don't present this as a failure.
+        summary = (
+            f"{n_files} log file{'s' if n_files != 1 else ''} analysed. No failed install, failing exit code or failed "
+            f"deployment outcome was found, so these logs may show a healthy deployment. The most notable problem in them is: "
+            f"{top.title}. {top.explanation}"
+        )
 
     verification = list(pattern.verification) if pattern and pattern.verification else [
         "Re-run the deployment on one test device and confirm the installer exits with 0 and the detection rule passes."

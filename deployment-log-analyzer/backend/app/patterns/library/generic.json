@@ -43,11 +43,11 @@
     },
     {
       "id": "generic-dotnet-exception",
-      "title": "Unhandled exception",
+      "title": "A .NET exception was logged",
       "category": "other",
-      "severity": "medium",
+      "severity": "low",
       "role": "cause",
-      "weight": 0.45,
+      "weight": 0.3,
       "regex": [
         "(?P<detail>[A-Za-z.]+Exception):\\s*[^\\r\\n]{0,120}"
       ],

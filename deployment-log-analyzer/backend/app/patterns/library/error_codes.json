@@ -57,5 +57,18 @@
     "0x80073712": "Servicing: component store is corrupt or a manifest is missing",
     "0x801C03F2": "Entra ID: device object not found (deleted or disabled) during device authentication",
     "0x801C0003": "Entra ID: the user is not authorised to join the device"
+  },
+  "aadsts": {
+    "700016": "Application (client) ID not found in the tenant: wrong tenant, deleted app registration, or no consent",
+    "7000215": "Invalid client secret",
+    "7000222": "Client secret has expired",
+    "50126": "Invalid username or password",
+    "50076": "Multi-factor authentication is required",
+    "53003": "Blocked by a Conditional Access policy",
+    "65001": "The user or admin has not consented to the application",
+    "50011": "The reply URL does not match the ones registered for the application",
+    "500011": "The resource principal (API) was not found in the tenant",
+    "70011": "Invalid scope requested",
+    "700082": "The refresh token has expired"
   }
 }

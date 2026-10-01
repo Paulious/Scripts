@@ -109,7 +109,7 @@
       "regex": [
         "(?:install\\w*|script|process|operation|download)[^\\r\\n]{0,40}\\b(?:timed out|time ?out (?:was )?(?:reached|exceeded|expired))",
         "\\bhas timed out\\b",
-        "exceeded (?:the )?max(?:imum)?[^\\r\\n]{0,30}(?:run|execution|time)",
+        "exceeded (?:the )?max(?:imum)?(?: allowed)? (?:run ?time|execution time|time|duration)",
         "0x800705B4",
         "(?:Enrollment Status Page|ESP)[^\\r\\n]{0,60}timed out"
       ],
@@ -130,12 +130,66 @@
       ]
     },
     {
+      "id": "entra-app-not-found",
+      "title": "A script or app used an Entra application that does not exist in this tenant",
+      "category": "auth",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.9,
+      "regex": [
+        "Application with identifier[\\s\\\\rn]*(?:'|\\\\u0027)(?P<detail>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})",
+        "AADSTS700016"
+      ],
+      "summary": "A request to Microsoft Entra ID was rejected because application (client) ID {detail} is not registered in this tenant (AADSTS700016). When this appears in Intune script output, it is the script's own sign-in that failed, not the device's.",
+      "remediation": [
+        {
+          "action": "Find which script is making the call",
+          "detail": "Look at the policy ID near the error in the Intune logs, then find that script in Intune (Devices, Scripts and remediations, or Platform scripts). Search it for the client ID."
+        },
+        {
+          "action": "Fix the application ID or tenant in the script",
+          "detail": "Scripts copied from another tenant often keep the old client ID and tenant ID. Use the app registration from your own tenant."
+        },
+        {
+          "action": "Check the app registration exists and has consent",
+          "detail": "If the app should exist, confirm it was not deleted and that an admin has consented to it."
+        }
+      ],
+      "verification": [
+        "The script's error output no longer contains AADSTS700016.",
+        "The script reports its data or result successfully."
+      ]
+    },
+    {
+      "id": "entra-client-secret",
+      "title": "A script or app used an invalid or expired client secret",
+      "category": "auth",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.9,
+      "regex": [
+        "AADSTS7000215",
+        "AADSTS7000222"
+      ],
+      "summary": "Microsoft Entra ID rejected a client secret: it is wrong (AADSTS7000215) or has expired (AADSTS7000222).",
+      "remediation": [
+        {
+          "action": "Create a new client secret and update the script or app",
+          "detail": "Secrets expire, usually after 6 to 24 months. Store the new one where the script reads it from."
+        },
+        {
+          "action": "Find the owner of the app registration",
+          "detail": "Check Entra ID, App registrations, Certificates and secrets for the expiry date."
+        }
+      ]
+    },
+    {
       "id": "intune-auth-failed",
       "title": "Authentication or token failure",
       "category": "auth",
       "severity": "high",
       "role": "cause",
-      "weight": 0.8,
+      "weight": 0.6,
       "regex": [
         "AADSTS\\d+",
         "invalid_grant",
@@ -143,20 +197,45 @@
         "token (?:is )?(?:expired|invalid|missing)",
         "Failed to (?:get|acquire|obtain)[^\\r\\n]{0,30}token"
       ],
-      "summary": "The device or user could not get a valid Entra ID token, so calls to the Intune service were rejected.",
+      "summary": "A request to Entra ID or the Intune service was rejected for an authentication reason. Check whether the message comes from Intune itself or from the output of a script it ran.",
       "remediation": [
         {
-          "action": "Check device registration",
+          "action": "Work out who was signing in",
+          "detail": "Intune's own sign-in problems point at the device (registration, clock, network). A message inside a script's error output points at that script."
+        },
+        {
+          "action": "Check device registration if it is Intune itself",
           "detail": "Confirm the device is Entra joined or hybrid joined and the PRT is healthy.",
           "command": "dsregcmd /status"
         },
         {
-          "action": "Check time and network",
-          "detail": "A wrong clock or a blocked login endpoint breaks token acquisition."
-        },
-        {
           "action": "Look up the AADSTS code",
           "detail": "The code in the log identifies the exact rejection reason."
+        }
+      ]
+    },
+    {
+      "id": "hs-detect-error-stream",
+      "title": "A remediation or detection script wrote an error but exited normally",
+      "category": "script",
+      "severity": "low",
+      "role": "cause",
+      "weight": 0.85,
+      "regex": [
+        "Detect error even if exit code is \\d+, error = (?P<detail>[^\\r\\n]{0,160})"
+      ],
+      "summary": "Intune logged an error from a health script even though the script exited with its normal code: {detail}",
+      "applies_to": [
+        "intune_ime"
+      ],
+      "remediation": [
+        {
+          "action": "Review the script's error handling",
+          "detail": "Add -ErrorAction SilentlyContinue (or try/catch) where a missing item is expected, so the error stream stays clean."
+        },
+        {
+          "action": "Check the run context",
+          "detail": "A script that reads HKCU: or user folders needs 'Run this script using the logged-on credentials' set, otherwise it looks in the wrong profile."
         }
       ]
     },

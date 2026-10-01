@@ -77,9 +77,9 @@
       "role": "cause",
       "weight": 0.6,
       "regex": [
-        "HRESULT\\s*=\\s*(?P<detail>0x800f[0-9a-fA-F]{4}|0x80073712)"
+        ", Error\\s+[^\\r\\n]*?HRESULT\\s*=\\s*(?P<detail>0x800f[0-9a-fA-F]{4}|0x80073712)"
       ],
-      "summary": "The Windows servicing stack logged {detail}.",
+      "summary": "The Windows servicing stack logged an error-level failure {detail}. (CBS.log also records many harmless failures at Info level; those are ignored.)",
       "remediation": [
         {
           "action": "Repair the component store",

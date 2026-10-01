@@ -46,6 +46,31 @@
       "reason": "Configuration values echoed at start-up. Settings, not events."
     },
     {
+      "id": "ime-flighting",
+      "regex": "\\[Flighting\\d?\\] (?:Key: [^,]+, value not found\\. Falling back to default value|CheckEnabledFlights:)",
+      "reason": "Intune feature-flag lookups. IME logs a fallback to the default for every flag the service has not set; it is not an error."
+    },
+    {
+      "id": "ime-routine-status",
+      "regex": "Not registering the new Channel URI as the previous channel is yet to expire|co-mgt features is not available|Found native machine from WoW\\d+ process|Failed to parse (?:appResultCreatedTimeUTC|downloadStartTimeUTC)|EspHelper\\]\\[CheckEspPhase\\] Not found instance|The EspPhase: NotInEsp",
+      "reason": "Status messages that Intune Management Extension logs at warning or error level during normal operation (no co-management, not in the Enrollment Status Page, and so on)."
+    },
+    {
+      "id": "ime-pollers",
+      "regex": "(?:application|policy) poller (?:starts|stopped)|\\[HS\\] Runner.*(?:Runner starts|Refresh session info|Processing user session|Completed user session|run State = RunLater|queued time .* is expired)|\\[Win32App\\] Refresh session info",
+      "reason": "Scheduler heartbeat lines from the app and remediation script pollers."
+    },
+    {
+      "id": "ime-no-user-session",
+      "regex": "LogonUser failed with error code : \\d+|AAD User check using device check in app is failed, now fallback to the Graph audience|Failed to get proxy info for session id \\d+",
+      "reason": "Intune probing a user session it cannot log on to (for example with nobody signed in) before falling back to device-level checks. Common and not a failure by itself."
+    },
+    {
+      "id": "ime-script-outcomes",
+      "regex": "\\[HS\\] (?:exit code of the script is|Returned exitcode from child process is) \\d+|Powershell execution is done, exitCode = \\d+|SideCarScript(?:Detection|Requirement)Manager Powershell ExitCode: \\d+",
+      "reason": "Exit codes from detection and remediation scripts. For these, a non-zero code usually means 'not compliant' or 'not detected', which is a result, not a failure."
+    },
+    {
       "id": "no-errors-text",
       "regex": "\\b(?:0|no|zero) (?:errors?|failures?)\\b",
       "reason": "Text reporting that there were no errors."
