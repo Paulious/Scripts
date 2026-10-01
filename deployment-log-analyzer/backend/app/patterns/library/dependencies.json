@@ -1,0 +1,159 @@
+{
+  "domain": "Prerequisites and dependencies",
+  "patterns": [
+    {
+      "id": "dep-dotnet-missing",
+      "title": ".NET runtime prerequisite is not installed",
+      "category": "prerequisite",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.95,
+      "regex": [
+        "(?P<detail>[^\\r\\n]{0,120}\\.NET (?:Desktop )?Runtime[^\\r\\n]{0,120}needs to be installed[^\\r\\n]{0,60})",
+        "framework 'Microsoft\\.(?:NETCore|WindowsDesktop|AspNetCore)\\.App'[^\\r\\n]{0,120}was not found",
+        "The specified framework[^\\r\\n]{0,80}was not found",
+        "You must install \\.NET",
+        "\\.NET Framework (?:\\d\\.\\d(?:\\.\\d)?)[^\\r\\n]{0,40}(?:is )?(?:required|not installed)"
+      ],
+      "summary": "The installer checked for a required .NET runtime and did not find it, so it stopped before changing anything: {detail}",
+      "remediation": [
+        {
+          "action": "Deploy the required .NET runtime first",
+          "detail": "Install the exact runtime family and architecture named in the log (for example .NET Desktop Runtime x64). Packaging it as an Intune Win32 app (or a Patch My PC app) and adding it as a dependency makes the order automatic."
+        },
+        {
+          "action": "Check the minimum version",
+          "detail": "The check is usually 'greater than' a specific patch version. Deploy the latest servicing release of that major version, not just any one."
+        },
+        {
+          "action": "Confirm on a device",
+          "detail": "Desktop Runtime must be listed, not only the base .NET runtime.",
+          "command": "dotnet --list-runtimes"
+        },
+        {
+          "action": "Retry the original deployment",
+          "detail": "Once the runtime is detected, re-sync the device so the app retries."
+        }
+      ],
+      "verification": [
+        "`dotnet --list-runtimes` lists Microsoft.WindowsDesktop.App at or above the required version.",
+        "The app installs with exit code 0 and its detection rule passes."
+      ]
+    },
+    {
+      "id": "dep-vcredist-missing",
+      "title": "Visual C++ runtime is missing",
+      "category": "prerequisite",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.85,
+      "regex": [
+        "(?:VCRUNTIME140(?:_1)?|MSVCP140)\\.dll[^\\r\\n]{0,60}(?:missing|not found|was not found)",
+        "The code execution cannot proceed because (?:VCRUNTIME|MSVCP)",
+        "Microsoft Visual C\\+\\+ (?:20\\d\\d|Redistributable)[^\\r\\n]{0,80}(?:required|not installed|needs to be installed)",
+        "0xC0000135"
+      ],
+      "summary": "A Visual C++ runtime library the application needs is not installed.",
+      "remediation": [
+        {
+          "action": "Deploy the matching VC++ Redistributable",
+          "detail": "Install the x64 (and x86 if the app is 32-bit) Visual C++ v14 Redistributable before the app, as a dependency."
+        }
+      ]
+    },
+    {
+      "id": "dep-prereq-failed",
+      "title": "A prerequisite check failed",
+      "category": "prerequisite",
+      "severity": "medium",
+      "role": "cause",
+      "weight": 0.5,
+      "regex": [
+        "prerequisites?[^\\r\\n]{0,60}(?:failed|not (?:met|installed|found|satisfied)|missing)",
+        "requirements? (?:was |were |is |are )?not (?:met|satisfied)"
+      ],
+      "summary": "The installer reported that a prerequisite was not met.",
+      "remediation": [
+        {
+          "action": "Read the message around this line",
+          "detail": "It normally names the missing item."
+        }
+      ]
+    },
+    {
+      "id": "dep-os-unsupported",
+      "title": "Operating system or platform not supported",
+      "category": "prerequisite",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.8,
+      "regex": [
+        "(?:not supported|unsupported)[^\\r\\n]{0,30}(?:on|for|with) (?:this )?(?:version of )?(?:Windows|operating system|OS)\\b",
+        "requires Windows (?:10|11|Server)[^\\r\\n]{0,40}",
+        "This installation package is not supported by this processor type",
+        "Error 1633",
+        "not supported on this platform"
+      ],
+      "summary": "The installer says this Windows version or CPU platform is not supported.",
+      "remediation": [
+        {
+          "action": "Check the app's supported platforms",
+          "detail": "Compare the device's OS build and architecture against the vendor's requirements."
+        },
+        {
+          "action": "Use the right requirement rule in Intune",
+          "detail": "Set minimum OS and architecture so the app only targets supported devices."
+        }
+      ]
+    },
+    {
+      "id": "dep-wrong-architecture",
+      "title": "Wrong architecture or damaged executable",
+      "category": "prerequisite",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.85,
+      "regex": [
+        "is not a valid Win32 application",
+        "0x800700C1",
+        "ERROR_BAD_EXE_FORMAT"
+      ],
+      "summary": "Windows could not run the installer binary: it is the wrong architecture (for example ARM64 vs x64) or the file is damaged.",
+      "remediation": [
+        {
+          "action": "Check the architecture",
+          "detail": "Match the installer to the device (x64, x86, ARM64)."
+        },
+        {
+          "action": "Re-download the source file",
+          "detail": "Verify the hash of the binary against the vendor."
+        }
+      ]
+    },
+    {
+      "id": "dep-pending-reboot",
+      "title": "A restart is pending",
+      "category": "reboot",
+      "severity": "medium",
+      "role": "cause",
+      "weight": 0.55,
+      "regex": [
+        "pending (?:file rename operations?|reboot|restart)",
+        "PendingFileRenameOperations",
+        "reboot (?:is )?(?:required|pending) before"
+      ],
+      "summary": "A previous change left the device waiting for a restart, which can block or break the next install.",
+      "remediation": [
+        {
+          "action": "Restart the device",
+          "detail": "Then let the app retry."
+        },
+        {
+          "action": "Check the pending-restart flags",
+          "detail": "",
+          "command": "Test-Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Component Based Servicing\\RebootPending'"
+        }
+      ]
+    }
+  ]
+}

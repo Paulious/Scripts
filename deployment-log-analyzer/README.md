@@ -1,0 +1,122 @@
+# Deployment Log Analyzer
+
+Upload the logs from a failed Intune or Windows app deployment and get back the most likely root cause, the log lines that prove it, and the steps to fix it. It reads like a note from a senior Intune support engineer, not a list of regex hits.
+
+It was built and tested against real Patch My PC logs (ScriptRunner, detection script, MSI verbose logs and Dell Update Package logs). On that set it picked out one real failure in 10,500 lines of mostly harmless noise: Dell Command Update 5.7.2 refusing to install because the .NET Desktop Runtime 10 was missing.
+
+## What it does
+
+1. Takes a ZIP (or tar.gz, gz, or loose log files) by drag and drop. Nested archives are opened automatically.
+2. Works out what each log is (Intune Management Extension, Patch My PC ScriptRunner, MSI verbose, Dell DUP, PSADT, CMTrace, or generic text). UTF-16 logs are handled, with or without a BOM.
+3. Runs a library of regex patterns (plain JSON, easy to extend) and filters out known harmless noise first.
+4. Pulls 100 lines either side of each finding.
+5. Ranks causes above symptoms, and links logs that point at each other (ScriptRunner names the installer log it launched).
+6. Asks an LLM to write the analysis (Claude, OpenAI or Azure OpenAI), or falls back to the pattern library alone.
+7. Scores confidence from five visible factors. The model can nudge the number but cannot push it more than 10 points above what the evidence supports.
+8. Exports a Markdown report.
+
+## Run it
+
+You need Python 3.11+ and Node 20+.
+
+```bash
+# 1. Backend
+cd backend
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env        # add a key for the provider you want, or leave empty
+uvicorn app.main:app --port 8000
+
+# 2. Frontend (new terminal)
+cd frontend
+npm install
+npm run dev                 # http://localhost:3000
+```
+
+Or with Docker: `docker compose up --build`, then open http://localhost:3000.
+
+With no API key set the app still works. It runs in "pattern library only" mode, which needs no outside network access at all.
+
+## Choosing an LLM
+
+Set the keys on the server in `backend/.env`. Keys never reach the browser. The upload screen lets the user pick from whatever is configured.
+
+| Provider | Settings |
+|---|---|
+| Anthropic Claude | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` (default `claude-opus-5-5`) |
+| OpenAI | `OPENAI_API_KEY`, `OPENAI_MODEL` (default `gpt-5`), optional `OPENAI_BASE_URL` |
+| Azure OpenAI | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION`, and either `AZURE_OPENAI_API_KEY` or nothing (then it uses the host's managed identity / Entra ID) |
+
+`LLM_PROVIDER=auto` picks the first one configured. To add another provider, subclass `LLMProvider` in `backend/app/llm/providers.py` (one method: `complete`) and register it in `factory.py`.
+
+If a provider call fails (rate limit, refusal, bad JSON), the user still gets the pattern-library result, with a note saying why.
+
+## Privacy and data handling
+
+- Nothing is stored. There is no database, no job queue, no session store. A request is read into memory, analysed, streamed back, and dropped.
+- Archives are expanded in memory. Size, file count, nesting depth and compression ratio are all limited.
+- Only excerpts go to the LLM, not whole files. Before they go, passwords, tokens, SAS signatures, emails and `C:\Users\<name>` are masked (switch off per request if you need to).
+- The log text is treated as untrusted. The prompt tells the model to ignore instructions found inside logs, and the model's output is validated before use. A finding ID it makes up is ignored.
+- The server never logs file names or contents. Responses are sent with `Cache-Control: no-store`.
+- The Docker setup runs read-only with `/tmp` on tmpfs. Large uploads can spill to `/tmp` while being received, and that space disappears with the container.
+
+If your policy says log data must not leave your tenant, use Azure OpenAI in your own subscription, or leave the provider on "pattern library only".
+
+## Adding patterns
+
+Patterns live in `backend/app/patterns/library/*.json`. A pattern looks like this:
+
+```json
+{
+  "id": "dep-dotnet-missing",
+  "title": ".NET runtime prerequisite is not installed",
+  "category": "prerequisite",
+  "severity": "high",
+  "role": "cause",
+  "weight": 0.95,
+  "regex": ["(?P<detail>.{0,120}\\.NET (?:Desktop )?Runtime.{0,120}needs to be installed.{0,60})"],
+  "summary": "The installer checked for a required .NET runtime and did not find it: {detail}",
+  "remediation": [{ "action": "Deploy the runtime first", "detail": "...", "command": "dotnet --list-runtimes" }],
+  "applies_to": ["msi_verbose", "dell_dup"]
+}
+```
+
+- `role`: `cause` says why it broke, `symptom` only says that it did (exit codes, "installation failed"). Causes always rank above symptoms.
+- `weight`: how specific the signature is. A named missing prerequisite is 0.9+, a generic exit code is about 0.35.
+- `(?P<detail>...)` captures text to show in the finding.
+- `ignore_details` lists regexes for captured values that should not count (for example exit code `0`).
+- Known-harmless lines go in `suppressions.json`. They are filtered out before matching and listed in the report as "checked and ruled out".
+
+Set `PATTERN_DIR` to a folder of extra JSON files to add your own without editing the built-in set. The tests check that every regex compiles, every pattern has remediation, and known benign lines do not match.
+
+## Adding a log format
+
+Create a class in `backend/app/parsers/`, subclass `LogParser`, implement `detect` (a 0 to 1 score from the filename and first lines) and `parse` (physical lines to entries), and add it to `PARSERS` in `parsers/__init__.py`.
+
+## Limits
+
+Configured in `backend/.env`: `MAX_UPLOAD_MB` (200), `MAX_EXTRACTED_MB` (600), `MAX_FILE_MB` (100), `MAX_FILES` (1000). Not supported yet: 7z, RAR and CAB archives (it tells the user to re-zip), and binary `.evtx` / `.etl` files (export to text first).
+
+## API
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/analyze` | multipart: `files`, optional `provider`, `context`, `redact`. Streams newline-delimited JSON: `progress` events, then one `result` (or `error`). |
+| `GET /api/config` | Which providers exist and are configured. No secrets. |
+| `GET /api/health` | Liveness. |
+| `GET /api/docs` | OpenAPI docs. |
+
+## Tests
+
+```bash
+cd backend && pip install -r requirements-dev.txt && python -m pytest
+cd frontend && npm run typecheck && npm run build
+```
+
+The backend tests cover decoding, archive safety, parsers, the pattern library, the 100-line evidence window, scoring, the pipeline end to end, and each provider's request format against a mocked HTTP layer.
+
+## Known limits
+
+- The LLM step cannot be tested here without a live key. The request shape for each provider is tested against mocks, but the quality of the written analysis depends on the model you connect.
+- Confidence is a judgement from the evidence, not a probability. It is capped at 95 on purpose.
+- The pattern library is a starting point built from common Intune, MSI and PowerShell failures. Add your own as you meet new ones.

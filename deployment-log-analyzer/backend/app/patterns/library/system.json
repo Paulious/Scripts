@@ -1,0 +1,271 @@
+{
+  "domain": "System, network and security",
+  "patterns": [
+    {
+      "id": "sys-access-denied",
+      "title": "Access denied",
+      "category": "permissions",
+      "severity": "medium",
+      "role": "cause",
+      "weight": 0.55,
+      "regex": [
+        "Access (?:to the path [^\\r\\n]{0,200} )?is denied",
+        "0x80070005",
+        "UnauthorizedAccessException",
+        "ERROR_ACCESS_DENIED",
+        "E_ACCESSDENIED"
+      ],
+      "summary": "An operation was refused for lack of permission.",
+      "remediation": [
+        {
+          "action": "Check the account and path",
+          "detail": "Confirm which account ran the step and its rights on the target."
+        },
+        {
+          "action": "Check security software",
+          "detail": "Controlled Folder Access, ASR and EDR can deny writes that NTFS allows."
+        }
+      ]
+    },
+    {
+      "id": "sys-file-in-use",
+      "title": "File or resource in use",
+      "category": "system",
+      "severity": "medium",
+      "role": "cause",
+      "weight": 0.65,
+      "regex": [
+        "being used by another process",
+        "ERROR_SHARING_VIOLATION",
+        "0x80070020",
+        "process cannot access the file"
+      ],
+      "summary": "A file the installer needed was locked by another process.",
+      "remediation": [
+        {
+          "action": "Close or block the application",
+          "detail": "Stop the running app before the update, or use a blocking-process policy."
+        },
+        {
+          "action": "Check for scanners",
+          "detail": "A real-time AV scan of the file can hold it briefly."
+        }
+      ]
+    },
+    {
+      "id": "sys-disk-space",
+      "title": "Not enough disk space",
+      "category": "system",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.85,
+      "regex": [
+        "not enough (?:disk )?space",
+        "ERROR_DISK_FULL",
+        "0x80070070",
+        "insufficient disk space"
+      ],
+      "summary": "The disk ran out of space during the operation.",
+      "remediation": [
+        {
+          "action": "Free space and retry",
+          "detail": "",
+          "command": "Get-PSDrive C | Select Used,Free"
+        },
+        {
+          "action": "Clean the update caches",
+          "detail": "Remove old IME and Windows Update caches if they are large."
+        }
+      ]
+    },
+    {
+      "id": "sys-blocked-by-policy",
+      "title": "Blocked by application control policy",
+      "category": "policy",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.8,
+      "regex": [
+        "0x800704EC",
+        "This program is blocked by group policy",
+        "blocked by group policy",
+        "Error 1260\\b",
+        "(?:blocked|prevented|denied) by (?:AppLocker|WDAC|Software Restriction|Windows Defender Application Control|Smart App Control)",
+        "(?:AppLocker|WDAC|Smart App Control)[^\\r\\n]{0,60}(?:blocked|prevented|denied)"
+      ],
+      "summary": "Application control (AppLocker, WDAC, Smart App Control or Software Restriction Policy) blocked something the install tried to run.",
+      "remediation": [
+        {
+          "action": "Check the application control logs",
+          "detail": "",
+          "command": "Get-WinEvent -LogName 'Microsoft-Windows-AppLocker/EXE and DLL' -MaxEvents 30"
+        },
+        {
+          "action": "Add an allow rule",
+          "detail": "Allow the publisher or hash that was blocked."
+        }
+      ]
+    },
+    {
+      "id": "sys-signature-invalid",
+      "title": "Code signature or certificate problem",
+      "category": "security",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.8,
+      "regex": [
+        "WinVerifyTrust",
+        "signature (?:is )?(?:invalid|verification failed|not valid)",
+        "0x800B0109",
+        "0x800B0101",
+        "0x80096010",
+        "CERT_E_",
+        "TRUST_E_"
+      ],
+      "summary": "Windows could not verify the signature on a file, usually because the root certificate is untrusted, a certificate has expired, or the file was altered.",
+      "remediation": [
+        {
+          "action": "Check the signature",
+          "detail": "",
+          "command": "Get-AuthenticodeSignature .\\installer.exe | Format-List"
+        },
+        {
+          "action": "Check the device trusts the chain",
+          "detail": "Make sure the root and intermediate certificates are present and time is correct."
+        }
+      ]
+    },
+    {
+      "id": "sys-dns-failure",
+      "title": "Name resolution failed",
+      "category": "network",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.75,
+      "regex": [
+        "0x80072EE7",
+        "The remote name could not be resolved",
+        "No such host is known",
+        "WSAHOST_NOT_FOUND"
+      ],
+      "summary": "A host name could not be resolved, so the download or service call never started.",
+      "remediation": [
+        {
+          "action": "Test DNS from the device",
+          "detail": "",
+          "command": "Resolve-DnsName <hostname>"
+        },
+        {
+          "action": "Check split DNS and VPN",
+          "detail": "Make sure the device resolves the same names off-network."
+        }
+      ]
+    },
+    {
+      "id": "sys-connection-failed",
+      "title": "Network connection failed or timed out",
+      "category": "network",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.7,
+      "regex": [
+        "0x80072EFD",
+        "0x80072EE2",
+        "0x80072EFF",
+        "Unable to connect to the remote server",
+        "A connection attempt failed",
+        "connection (?:timed out|refused|was forcibly closed)",
+        "WinHttp[^\\r\\n]{0,40}(?:error|fail)"
+      ],
+      "summary": "The device could not reach a required endpoint.",
+      "remediation": [
+        {
+          "action": "Test connectivity",
+          "detail": "",
+          "command": "Test-NetConnection <hostname> -Port 443"
+        },
+        {
+          "action": "Check firewall and proxy allow-lists",
+          "detail": "Confirm the Microsoft and vendor endpoints are allowed."
+        }
+      ]
+    },
+    {
+      "id": "sys-tls-failure",
+      "title": "TLS or certificate trust failure",
+      "category": "network",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.75,
+      "regex": [
+        "SEC_E_UNTRUSTED_ROOT",
+        "SEC_E_CERT_EXPIRED",
+        "Could not establish trust relationship",
+        "The remote certificate is invalid",
+        "0x80072F8F",
+        "0x80090325",
+        "SSL (?:error|handshake)",
+        "TLS (?:error|handshake)"
+      ],
+      "summary": "A secure connection failed certificate or protocol checks - common behind SSL inspection or with a wrong system clock.",
+      "remediation": [
+        {
+          "action": "Check the system clock",
+          "detail": "",
+          "command": "w32tm /query /status"
+        },
+        {
+          "action": "Bypass inspection for these hosts",
+          "detail": "Exclude Intune and vendor download hosts from SSL inspection."
+        },
+        {
+          "action": "Check the proxy's root certificate",
+          "detail": "Make sure it is in the device Trusted Root store."
+        }
+      ]
+    },
+    {
+      "id": "sys-proxy-auth",
+      "title": "Proxy requires authentication",
+      "category": "network",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.75,
+      "regex": [
+        "\\b407\\b[^\\r\\n]{0,30}Proxy",
+        "Proxy Authentication Required"
+      ],
+      "summary": "A proxy refused the request and asked for credentials. Services running as SYSTEM usually cannot answer that.",
+      "remediation": [
+        {
+          "action": "Exempt the required endpoints from proxy authentication",
+          "detail": "Use a PAC rule or an allow-list for SYSTEM traffic."
+        }
+      ]
+    },
+    {
+      "id": "sys-security-software",
+      "title": "Security software interfered",
+      "category": "security",
+      "severity": "medium",
+      "role": "cause",
+      "weight": 0.6,
+      "regex": [
+        "quarantin",
+        "(?:Defender|antivirus|security software|EDR)[^\\r\\n]{0,60}(?:blocked|removed|interfer)"
+      ],
+      "summary": "Security software appears to have blocked or removed something.",
+      "remediation": [
+        {
+          "action": "Check detections",
+          "detail": "",
+          "command": "Get-MpThreatDetection | Sort InitialDetectionTime -Desc | Select -First 10"
+        },
+        {
+          "action": "Add an exclusion if appropriate",
+          "detail": "Only after confirming the file is legitimate."
+        }
+      ]
+    }
+  ]
+}

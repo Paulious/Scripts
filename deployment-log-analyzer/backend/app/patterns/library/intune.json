@@ -1,0 +1,229 @@
+{
+  "domain": "Intune Management Extension",
+  "patterns": [
+    {
+      "id": "intune-not-detected",
+      "title": "Intune did not detect the app after install",
+      "category": "detection",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.8,
+      "regex": [
+        "0x87D1041C",
+        "not detected after install",
+        "application was not detected after",
+        "detection (?:rule|script)s?[^\\r\\n]{0,80}(?:not detected|returned (?:false|no output)|did not detect|failed)",
+        "post[- ]install(?:ation)? detection[^\\r\\n]{0,60}(?:fail|not)"
+      ],
+      "summary": "The installer ran but the Intune detection rule did not find the app afterwards, so Intune reports the install as failed.",
+      "applies_to": [
+        "intune_ime",
+        "patchmypc_scriptrunner"
+      ],
+      "remediation": [
+        {
+          "action": "Compare the rule with what the installer really wrote",
+          "detail": "Check the exact MSI product code, file version or registry value on a device that has the app installed."
+        },
+        {
+          "action": "Check 32-bit vs 64-bit",
+          "detail": "Registry and file rules default to the 64-bit view for 64-bit apps; for 32-bit installers use the right view or enable 'Run script as 32-bit'."
+        },
+        {
+          "action": "Fix script rules",
+          "detail": "A custom detection script must write something to STDOUT and exit 0 to count as detected."
+        },
+        {
+          "action": "Check version comparison",
+          "detail": "Use 'greater than or equal to', not 'equals', so updates still pass.",
+          "command": "Get-ItemProperty HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*, HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\* | Where DisplayName -like '*AppName*' | Select DisplayName,DisplayVersion,PSChildName"
+        }
+      ]
+    },
+    {
+      "id": "intune-download-failed",
+      "title": "Content download failed",
+      "category": "content",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.7,
+      "regex": [
+        "(?:content )?download (?:failed|error|aborted)",
+        "failed to download",
+        "BITS job[^\\r\\n]{0,40}(?:error|fail)",
+        "Delivery Optimization[^\\r\\n]{0,60}(?:error|fail)"
+      ],
+      "summary": "The device could not download the app content.",
+      "remediation": [
+        {
+          "action": "Check network access",
+          "detail": "Confirm the device can reach the Intune content endpoints through any proxy or firewall."
+        },
+        {
+          "action": "Check Delivery Optimization",
+          "detail": "A bad DO group or peer setting can stall content. Test with DO set to HTTP only."
+        },
+        {
+          "action": "Check disk space",
+          "detail": "Content is staged locally before install."
+        }
+      ]
+    },
+    {
+      "id": "intune-hash-mismatch",
+      "title": "Downloaded content failed integrity check",
+      "category": "content",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.85,
+      "regex": [
+        "hash (?:mismatch|validation failed|verification failed|does not match)",
+        "digest (?:mismatch|does not match)",
+        "0x80070570",
+        "ERROR_FILE_CORRUPT"
+      ],
+      "summary": "The downloaded content does not match its expected hash. It was corrupted in transit or altered by something in the path.",
+      "remediation": [
+        {
+          "action": "Retry the download",
+          "detail": "Clear the IME content cache on one test device and re-sync.",
+          "command": "Remove-Item 'C:\\Windows\\IMECache\\*' -Recurse -Force"
+        },
+        {
+          "action": "Check inline inspection",
+          "detail": "SSL inspection or a caching proxy can alter content; bypass it for Intune content hosts."
+        },
+        {
+          "action": "Re-upload the package",
+          "detail": "If it keeps failing, rebuild the .intunewin and upload it again."
+        }
+      ]
+    },
+    {
+      "id": "intune-timeout",
+      "title": "Install or operation timed out",
+      "category": "timeout",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.75,
+      "regex": [
+        "(?:install\\w*|script|process|operation|download)[^\\r\\n]{0,40}\\b(?:timed out|time ?out (?:was )?(?:reached|exceeded|expired))",
+        "\\bhas timed out\\b",
+        "exceeded (?:the )?max(?:imum)?[^\\r\\n]{0,30}(?:run|execution|time)",
+        "0x800705B4",
+        "(?:Enrollment Status Page|ESP)[^\\r\\n]{0,60}timed out"
+      ],
+      "summary": "Something ran past its allowed time. Intune stops Win32 installs that run longer than the configured limit (60 minutes by default).",
+      "remediation": [
+        {
+          "action": "Find what was slow",
+          "detail": "Check the timestamps to see where the time went (download, install, waiting on a prompt)."
+        },
+        {
+          "action": "Make sure the install is silent",
+          "detail": "A hidden dialog waiting for input will time out every time."
+        },
+        {
+          "action": "Raise the maximum run time if justified",
+          "detail": "Set it on the app, but only after confirming the install is genuinely slow."
+        }
+      ]
+    },
+    {
+      "id": "intune-auth-failed",
+      "title": "Authentication or token failure",
+      "category": "auth",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.8,
+      "regex": [
+        "AADSTS\\d+",
+        "invalid_grant",
+        "\\b401\\b[^\\r\\n]{0,30}Unauthorized",
+        "token (?:is )?(?:expired|invalid|missing)",
+        "Failed to (?:get|acquire|obtain)[^\\r\\n]{0,30}token"
+      ],
+      "summary": "The device or user could not get a valid Entra ID token, so calls to the Intune service were rejected.",
+      "remediation": [
+        {
+          "action": "Check device registration",
+          "detail": "Confirm the device is Entra joined or hybrid joined and the PRT is healthy.",
+          "command": "dsregcmd /status"
+        },
+        {
+          "action": "Check time and network",
+          "detail": "A wrong clock or a blocked login endpoint breaks token acquisition."
+        },
+        {
+          "action": "Look up the AADSTS code",
+          "detail": "The code in the log identifies the exact rejection reason."
+        }
+      ]
+    },
+    {
+      "id": "intune-requirement-not-met",
+      "title": "App requirement rule not met",
+      "category": "detection",
+      "severity": "medium",
+      "role": "cause",
+      "weight": 0.7,
+      "regex": [
+        "requirement rules?[^\\r\\n]{0,60}(?:not met|failed|false)",
+        "requirement script[^\\r\\n]{0,60}(?:fail|false)"
+      ],
+      "summary": "The device did not meet the app's requirement rules, so Intune skipped the install as 'not applicable'.",
+      "remediation": [
+        {
+          "action": "Review the requirement rules",
+          "detail": "Check OS version, architecture, disk space and any custom requirement script against the device."
+        }
+      ]
+    },
+    {
+      "id": "intune-dependency-failed",
+      "title": "App dependency failed",
+      "category": "prerequisite",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.85,
+      "regex": [
+        "dependenc(?:y|ies)[^\\r\\n]{0,60}(?:fail|not (?:met|installed|detected))",
+        "failed to install (?:the )?dependenc"
+      ],
+      "summary": "A dependency app did not install or was not detected, so the parent app did not run.",
+      "applies_to": [
+        "intune_ime"
+      ],
+      "remediation": [
+        {
+          "action": "Fix the dependency first",
+          "detail": "Open the dependency's own log entries and resolve that failure; the parent will follow."
+        }
+      ]
+    },
+    {
+      "id": "intune-no-user",
+      "title": "Install needs a signed-in user but none is available",
+      "category": "context",
+      "severity": "medium",
+      "role": "cause",
+      "weight": 0.7,
+      "regex": [
+        "(?:no|not) (?:logged on|signed[- ]in|interactive) user",
+        "user session (?:is )?not (?:available|found)",
+        "Could not find (?:an )?(?:active|logged[- ]?on) user"
+      ],
+      "summary": "The app is set to install in user context (or needs a user session) and nobody was signed in.",
+      "remediation": [
+        {
+          "action": "Use device context where possible",
+          "detail": "Set install behaviour to System unless the app genuinely needs the user profile."
+        },
+        {
+          "action": "Otherwise schedule for when users are signed in",
+          "detail": ""
+        }
+      ]
+    }
+  ]
+}

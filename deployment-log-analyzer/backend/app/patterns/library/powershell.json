@@ -1,0 +1,162 @@
+{
+  "domain": "PowerShell",
+  "patterns": [
+    {
+      "id": "ps-command-not-found",
+      "title": "PowerShell command not found",
+      "category": "script",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.85,
+      "regex": [
+        "The term '(?P<detail>[^']+)' is not recognized as the name of a cmdlet"
+      ],
+      "summary": "The script called '{detail}', which does not exist in this session (missing module, typo, or a tool not on PATH for SYSTEM).",
+      "remediation": [
+        {
+          "action": "Check the module or tool is present",
+          "detail": "Install the module, or call the executable by full path."
+        },
+        {
+          "action": "Test as SYSTEM",
+          "detail": "PATH and modules differ between your user and SYSTEM; test with PsExec -s."
+        }
+      ]
+    },
+    {
+      "id": "ps-path-not-found",
+      "title": "Path not found",
+      "category": "script",
+      "severity": "medium",
+      "role": "cause",
+      "weight": 0.7,
+      "regex": [
+        "Cannot find path '(?P<detail>[^']+)' because it does not exist",
+        "Could not find (?:a part of the path|file) '(?P<detail>[^']+)'"
+      ],
+      "summary": "The script looked for '{detail}' and it was not there.",
+      "remediation": [
+        {
+          "action": "Check the path exists in the install context",
+          "detail": "Mapped drives and user-profile paths do not exist for SYSTEM."
+        },
+        {
+          "action": "Use $PSScriptRoot for packaged files",
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "id": "ps-execution-policy",
+      "title": "PowerShell execution policy blocked the script",
+      "category": "policy",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.8,
+      "regex": [
+        "running scripts is disabled on this system",
+        "execution of scripts is disabled",
+        "PSSecurityException"
+      ],
+      "summary": "A PowerShell execution policy (usually set by GPO or Intune) blocked the script.",
+      "remediation": [
+        {
+          "action": "Run with a process-level bypass",
+          "detail": "",
+          "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\script.ps1"
+        },
+        {
+          "action": "Check the effective policy",
+          "detail": "",
+          "command": "Get-ExecutionPolicy -List"
+        }
+      ]
+    },
+    {
+      "id": "ps-parse-error",
+      "title": "PowerShell syntax error",
+      "category": "script",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.85,
+      "regex": [
+        "ParserError",
+        "ParseException",
+        "Unexpected token '[^']*' in expression",
+        "The string is missing the terminator"
+      ],
+      "summary": "The script has a syntax error and never ran.",
+      "remediation": [
+        {
+          "action": "Check the encoding and quotes",
+          "detail": "Smart quotes and wrong file encoding are the usual culprits after copy/paste."
+        },
+        {
+          "action": "Parse it locally",
+          "detail": "",
+          "command": "powershell -NoProfile -Command \\\"[void][System.Management.Automation.Language.Parser]::ParseFile('.\\script.ps1',[ref]$null,[ref]$e); $e\\\""
+        }
+      ]
+    },
+    {
+      "id": "ps-module-missing",
+      "title": "PowerShell module not found",
+      "category": "script",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.85,
+      "regex": [
+        "The specified module '(?P<detail>[^']+)' was not loaded because no valid module file was found"
+      ],
+      "summary": "The module '{detail}' is not installed for the account running the script.",
+      "remediation": [
+        {
+          "action": "Install the module for all users",
+          "detail": "Use Install-Module -Scope AllUsers, or ship the module with the package."
+        }
+      ]
+    },
+    {
+      "id": "ps-constrained-language",
+      "title": "PowerShell Constrained Language Mode",
+      "category": "policy",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.85,
+      "regex": [
+        "ConstrainedLanguage",
+        "Cannot invoke method\\. Method invocation is supported only on core types in this language mode"
+      ],
+      "summary": "The script ran in Constrained Language Mode (usually from WDAC or AppLocker), which blocks many .NET calls.",
+      "remediation": [
+        {
+          "action": "Sign the script or allow it in the policy",
+          "detail": "Unsigned scripts run constrained when script enforcement is on."
+        },
+        {
+          "action": "Rewrite to avoid blocked calls",
+          "detail": "Use cmdlets instead of direct .NET method calls."
+        }
+      ]
+    },
+    {
+      "id": "ps-exception",
+      "title": "PowerShell terminating error",
+      "category": "script",
+      "severity": "medium",
+      "role": "cause",
+      "weight": 0.55,
+      "regex": [
+        "FullyQualifiedErrorId\\s*:\\s*(?P<detail>\\S+)",
+        "Exception calling \\\"[^\\\"]+\\\" with"
+      ],
+      "summary": "The script hit an error ({detail}).",
+      "remediation": [
+        {
+          "action": "Read the full error record",
+          "detail": "Look at the lines around it for the target object and message."
+        }
+      ]
+    }
+  ]
+}

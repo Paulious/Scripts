@@ -1,0 +1,63 @@
+{
+  "domain": "Generic",
+  "patterns": [
+    {
+      "id": "generic-exit-code",
+      "title": "Process exited with a non-zero code",
+      "category": "exit-code",
+      "severity": "medium",
+      "role": "symptom",
+      "weight": 0.35,
+      "regex": [
+        "(?:exit(?:ed)? ?code|exitcode|return(?:ed)? code|error ?level|with code|exited with (?:exit )?code|result code)(?: is| set to| was| =)?\\s*[:=]?\\s*\\(?(?P<detail>-?(?!0(?![0-9]))\\d+)(?![0-9A-Za-z])",
+        "(?:exit(?:ed)? ?code|exitcode|return(?:ed)? code|with code|result code)(?: is| set to| was| =)?\\s*[:=]?\\s*\\(?(?P<detail>0x[0-9A-Fa-f]{1,8})"
+      ],
+      "summary": "A process finished with exit code {detail}. Zero means success, so this marks a failure point but not the reason.",
+      "ignore_details": [
+        "^(?:0|1707|3010|1641|0x0+)$"
+      ],
+      "remediation": [
+        {
+          "action": "Identify the process and its documentation",
+          "detail": "Look up the exit code in the vendor or installer documentation."
+        }
+      ]
+    },
+    {
+      "id": "generic-fatal",
+      "title": "Fatal error or crash reported",
+      "category": "other",
+      "severity": "high",
+      "role": "symptom",
+      "weight": 0.3,
+      "regex": [
+        "\\b(?:fatal error|unhandled exception|access violation|stack overflow|segmentation fault)\\b"
+      ],
+      "summary": "The log records a fatal error or crash.",
+      "remediation": [
+        {
+          "action": "Capture a crash dump or Event Log entry",
+          "detail": "Look for an Application Error event (1000) for the same time."
+        }
+      ]
+    },
+    {
+      "id": "generic-dotnet-exception",
+      "title": "Unhandled exception",
+      "category": "other",
+      "severity": "medium",
+      "role": "cause",
+      "weight": 0.45,
+      "regex": [
+        "(?P<detail>[A-Za-z.]+Exception):\\s*[^\\r\\n]{0,120}"
+      ],
+      "summary": "An exception was thrown: {detail}.",
+      "remediation": [
+        {
+          "action": "Read the exception message and stack",
+          "detail": "The first frame in your code or the vendor's usually names the failing call."
+        }
+      ]
+    }
+  ]
+}

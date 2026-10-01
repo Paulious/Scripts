@@ -1,0 +1,543 @@
+{
+  "domain": "Windows Installer",
+  "patterns": [
+    {
+      "id": "msi-launch-condition",
+      "title": "MSI launch condition blocked the install",
+      "category": "prerequisite",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.8,
+      "regex": [
+        "Action ended \\d{1,2}:\\d{2}:\\d{2}: LaunchConditions\\. Return value 3"
+      ],
+      "summary": "The package's LaunchConditions check failed, so Windows Installer refused to start. This is a deliberate gate in the MSI (OS version, CPU architecture, a missing runtime, or a newer version already present), not a crash.",
+      "applies_to": [
+        "msi_verbose",
+        "dell_dup"
+      ],
+      "remediation": [
+        {
+          "action": "Find the condition text",
+          "detail": "Look a few lines above the failing line for the message the installer tried to show (it usually names the missing requirement)."
+        },
+        {
+          "action": "Satisfy the prerequisite",
+          "detail": "Install or deploy the requirement first, then retry. In Intune, model it as an app dependency so it installs automatically."
+        },
+        {
+          "action": "Reproduce locally",
+          "detail": "Run the MSI interactively as SYSTEM or admin with verbose logging to see the exact message.",
+          "command": "msiexec /i package.msi /l*v C:\\Temp\\msi.log"
+        }
+      ]
+    },
+    {
+      "id": "msi-custom-action-failed",
+      "title": "MSI custom action failed",
+      "category": "installer",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.6,
+      "regex": [
+        "CustomAction (?P<detail>\\S+ returned actual error code \\d+)(?!.*translated to success)"
+      ],
+      "summary": "A custom action inside the installer returned an error and it was not marked as ignorable, so the install stopped. The action name tells you which stage broke ({detail}).",
+      "applies_to": [
+        "msi_verbose",
+        "dell_dup"
+      ],
+      "remediation": [
+        {
+          "action": "Identify the custom action",
+          "detail": "Search the log for the action name and read the 20-30 lines before it; the cause is usually logged just ahead of the failure."
+        },
+        {
+          "action": "Check what the action depends on",
+          "detail": "Custom actions typically run scripts, check prerequisites or start services. Confirm those are present for the SYSTEM account."
+        },
+        {
+          "action": "Re-run with logging",
+          "detail": "Reproduce with verbose logging on a test device in the same context (SYSTEM) as Intune.",
+          "command": "msiexec /i package.msi /qn /l*v C:\\Temp\\msi.log"
+        }
+      ]
+    },
+    {
+      "id": "msi-return-value-3",
+      "title": "MSI action returned failure (Return value 3)",
+      "category": "installer",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.55,
+      "regex": [
+        "Action ended \\d{1,2}:\\d{2}:\\d{2}: (?P<detail>\\w+)\\. Return value 3"
+      ],
+      "summary": "The installer action '{detail}' failed. 'Return value 3' is how a verbose MSI log marks the first step that went wrong; everything after it is clean-up and rollback.",
+      "applies_to": [
+        "msi_verbose",
+        "dell_dup"
+      ],
+      "remediation": [
+        {
+          "action": "Read the lines above the failing action",
+          "detail": "The reason is normally logged immediately before 'Return value 3'."
+        },
+        {
+          "action": "Re-run with verbose logging",
+          "detail": "Reproduce as SYSTEM so you see what Intune sees.",
+          "command": "msiexec /i package.msi /qn /l*v C:\\Temp\\msi.log"
+        }
+      ]
+    },
+    {
+      "id": "msi-install-failed",
+      "title": "Windows Installer reported the operation failed",
+      "category": "installer",
+      "severity": "high",
+      "role": "symptom",
+      "weight": 0.3,
+      "regex": [
+        "Product: (?P<detail>.+?) -- (?:Installation|Removal|Configuration) (?:operation )?failed"
+      ],
+      "summary": "Windows Installer ended the operation for '{detail}' as failed. This is the outcome, not the reason - look for the cause earlier in the log.",
+      "applies_to": [
+        "msi_verbose",
+        "dell_dup"
+      ],
+      "remediation": [
+        {
+          "action": "Work backwards from this line",
+          "detail": "Find the first 'Return value 3' or error before it."
+        }
+      ]
+    },
+    {
+      "id": "msi-final-status",
+      "title": "MSI finished with a non-zero status",
+      "category": "installer",
+      "severity": "high",
+      "role": "symptom",
+      "weight": 0.3,
+      "regex": [
+        "Installation success or error status: (?P<detail>\\d+)",
+        "MainEngineThread is returning (?P<detail>\\d+)"
+      ],
+      "summary": "The installer's final status was {detail}. Intune and Patch My PC treat anything other than 0, 1707, 3010 or 1641 as a failure.",
+      "applies_to": [
+        "msi_verbose",
+        "dell_dup"
+      ],
+      "ignore_details": [
+        "^(?:0|1641|3010|1707)$"
+      ],
+      "remediation": [
+        {
+          "action": "Look up the code",
+          "detail": "Match the number against the Windows Installer error code list and read the lines before the final status."
+        }
+      ]
+    },
+    {
+      "id": "msi-error-dialog",
+      "title": "Windows Installer raised a numbered error",
+      "category": "installer",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.8,
+      "regex": [
+        "Product: .+? -- (?P<detail>Error \\d{4}\\..{0,160})"
+      ],
+      "summary": "The installer logged a numbered error: {detail}",
+      "applies_to": [
+        "msi_verbose",
+        "dell_dup"
+      ],
+      "remediation": [
+        {
+          "action": "Act on the specific error number",
+          "detail": "The error number identifies the failing condition. See the code meaning in the finding and the Windows Installer error codes reference."
+        }
+      ]
+    },
+    {
+      "id": "msi-reboot-required",
+      "title": "Installer requested a restart",
+      "category": "reboot",
+      "severity": "low",
+      "role": "symptom",
+      "weight": 0.25,
+      "regex": [
+        "Installation success or error status: (?P<detail>3010|1641)",
+        "ERROR_SUCCESS_REBOOT_REQUIRED",
+        "0x80070BC2"
+      ],
+      "summary": "The install finished but needs a restart (3010 = soft reboot, 1641 = installer started a reboot). That is not a failure, but a pending restart can block the next installer.",
+      "remediation": [
+        {
+          "action": "Map the return code in Intune",
+          "detail": "Make sure 3010 is set to 'Soft reboot' (or Hard reboot if you want one) in the app's return codes."
+        },
+        {
+          "action": "Schedule the restart",
+          "detail": "Use a restart grace period or maintenance window so users are not surprised."
+        }
+      ]
+    },
+    {
+      "id": "msi-another-install",
+      "title": "Another installation was already running (1618)",
+      "category": "installer",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.85,
+      "regex": [
+        "Error 1618",
+        "another installation is already in progress",
+        "status: 1618",
+        "0x80070652",
+        "ERROR_INSTALL_ALREADY_RUNNING"
+      ],
+      "summary": "Windows Installer only runs one install at a time and the mutex was held by something else (another MSI, Windows Update, or a second Intune/Patch My PC job).",
+      "remediation": [
+        {
+          "action": "Retry later",
+          "detail": "Usually clears on its own. Intune retries failed Win32 apps automatically."
+        },
+        {
+          "action": "Find the other installer",
+          "detail": "Check which msiexec.exe or TrustedInstaller.exe process is running and why.",
+          "command": "Get-Process msiexec,TrustedInstaller -ErrorAction SilentlyContinue | Select Id,StartTime,Path"
+        },
+        {
+          "action": "Reduce overlap",
+          "detail": "Stagger assignments so Patch My PC, Windows Update and Intune apps do not all land at the same moment."
+        }
+      ]
+    },
+    {
+      "id": "msi-package-cannot-open",
+      "title": "MSI package could not be opened (1619/1620)",
+      "category": "content",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.8,
+      "regex": [
+        "Error 1619",
+        "Error 1620",
+        "status: 161[9]",
+        "status: 1620",
+        "This installation package could not be opened"
+      ],
+      "summary": "Windows Installer could not open the .msi file. Typical reasons: a truncated or corrupt download, the file is on a path SYSTEM cannot reach, or security software locked or removed it.",
+      "remediation": [
+        {
+          "action": "Check the content",
+          "detail": "Confirm the file hash matches the source and the package was not modified after upload."
+        },
+        {
+          "action": "Check the path",
+          "detail": "Make sure the MSI is local when it runs (Intune stages it in the IME cache) and not on a UNC share SYSTEM cannot read."
+        },
+        {
+          "action": "Check security software",
+          "detail": "Look for Defender or EDR detections on the file around the time of the failure."
+        }
+      ]
+    },
+    {
+      "id": "msi-source-missing",
+      "title": "Installer source is not available (1612/1706)",
+      "category": "content",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.8,
+      "regex": [
+        "Error 1612",
+        "Error 1706",
+        "installation source for this product is not available",
+        "No valid source could be found"
+      ],
+      "summary": "Windows Installer needs the original MSI to repair, upgrade or uninstall this product and cannot find it. This is common when the cached package was cleaned up.",
+      "remediation": [
+        {
+          "action": "Provide the original MSI",
+          "detail": "Upgrade or uninstall using the same MSI version that was originally installed, or use the Microsoft Program Install and Uninstall troubleshooter."
+        },
+        {
+          "action": "Clean up the broken registration",
+          "detail": "If the product is gone but still registered, remove the orphaned entry (for example with the Microsoft Install/Uninstall troubleshooter or msizap-style tooling) and reinstall."
+        }
+      ]
+    },
+    {
+      "id": "msi-version-conflict",
+      "title": "Another or newer version is already installed (1638)",
+      "category": "installer",
+      "severity": "medium",
+      "role": "cause",
+      "weight": 0.8,
+      "regex": [
+        "Error 1638",
+        "Another version of this product is already installed",
+        "A newer version of .{0,80} is already installed",
+        "status: 1638"
+      ],
+      "summary": "The MSI will not install over the version already on the device (same product, different version, no major upgrade defined).",
+      "remediation": [
+        {
+          "action": "Uninstall the existing version first",
+          "detail": "Use a pre-install script, a supersedence relationship in Intune, or the vendor's uninstall switch."
+        },
+        {
+          "action": "Check the product and upgrade codes",
+          "detail": "If the vendor ships a major upgrade, the new MSI should replace the old one; if not, they need to be removed explicitly."
+        }
+      ]
+    },
+    {
+      "id": "msi-insufficient-privileges",
+      "title": "Installer lacked privileges (1925)",
+      "category": "permissions",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.8,
+      "regex": [
+        "Error 1925",
+        "do not have sufficient privileges to complete this installation",
+        "status: 1925"
+      ],
+      "summary": "The install ran without administrator rights for an all-users install.",
+      "remediation": [
+        {
+          "action": "Set the install context to System",
+          "detail": "In the Intune Win32 app, set Install behaviour to 'System' rather than 'User'."
+        },
+        {
+          "action": "Check how it was launched",
+          "detail": "If run through a script, make sure it runs as SYSTEM or elevated."
+        }
+      ]
+    },
+    {
+      "id": "msi-service-failed",
+      "title": "A service failed to start or install (1920)",
+      "category": "installer",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.8,
+      "regex": [
+        "Error 1920",
+        "Service .{0,100} failed to start",
+        "status: 1920"
+      ],
+      "summary": "The installer tried to start a service as part of setup and it did not come up. The service itself usually logs why in the Windows Event Log.",
+      "remediation": [
+        {
+          "action": "Check the service account and dependencies",
+          "detail": "Confirm the service's logon account, dependencies and binary path are valid."
+        },
+        {
+          "action": "Read the Event Log",
+          "detail": "Look in System and Application logs around the failure time.",
+          "command": "Get-WinEvent -FilterHashtable @{LogName='System'; Level=1,2; StartTime=(Get-Date).AddHours(-2)} | Select -First 30 TimeCreated,ProviderName,Message"
+        },
+        {
+          "action": "Check security software",
+          "detail": "EDR or AppLocker rules sometimes stop new services starting."
+        }
+      ]
+    },
+    {
+      "id": "msi-file-write-denied",
+      "title": "Installer could not write a file or folder (1303/1304/1310/1321)",
+      "category": "permissions",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.75,
+      "regex": [
+        "Error 13(?:03|04|10|21)\\b"
+      ],
+      "summary": "The installer was refused access to a file or folder while copying files.",
+      "remediation": [
+        {
+          "action": "Check the target path",
+          "detail": "Confirm SYSTEM has write access and the folder is not redirected or locked."
+        },
+        {
+          "action": "Check for locked files",
+          "detail": "A running copy of the app, or an AV scan, may hold the file open."
+        },
+        {
+          "action": "Check controlled folder access",
+          "detail": "Defender Controlled Folder Access or ASR rules can block writes to protected locations."
+        }
+      ]
+    },
+    {
+      "id": "msi-script-action-failed",
+      "title": "MSI script custom action failed (1722)",
+      "category": "installer",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.75,
+      "regex": [
+        "Error 1722",
+        "status: 1722"
+      ],
+      "summary": "A program or script run by the installer did not finish as expected.",
+      "remediation": [
+        {
+          "action": "Identify the script",
+          "detail": "Find the 'Action start ... CustomAction' just before the failure and note which script or executable it runs."
+        },
+        {
+          "action": "Test it as SYSTEM",
+          "detail": "Run the same script under SYSTEM (PsExec -s) to see the real error."
+        }
+      ]
+    },
+    {
+      "id": "msi-assembly-install",
+      "title": "Installer failed registering a .NET assembly (1935)",
+      "category": "installer",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.8,
+      "regex": [
+        "Error 1935",
+        "An error occurred during the installation of assembly",
+        "status: 1935"
+      ],
+      "summary": "Registering a .NET assembly in the GAC failed. Common causes are a damaged .NET Framework, a pending reboot or a stuck Windows servicing operation.",
+      "remediation": [
+        {
+          "action": "Restart and retry",
+          "detail": "A pending reboot often clears this."
+        },
+        {
+          "action": "Repair .NET and the component store",
+          "detail": "Run DISM and SFC, then retry.",
+          "command": "DISM /Online /Cleanup-Image /RestoreHealth; sfc /scannow"
+        }
+      ]
+    },
+    {
+      "id": "msi-policy-forbidden",
+      "title": "Windows Installer policy blocks the install (1625)",
+      "category": "policy",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.85,
+      "regex": [
+        "Error 1625",
+        "forbidden by system policy",
+        "status: 1625"
+      ],
+      "summary": "A Windows Installer policy (DisableMSI, or an AppLocker/WDAC rule on installers) prevents this package from installing.",
+      "remediation": [
+        {
+          "action": "Check Windows Installer policy",
+          "detail": "Look at the DisableMSI value and any AppLocker Windows Installer rules.",
+          "command": "Get-ItemProperty 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Installer' -ErrorAction SilentlyContinue"
+        },
+        {
+          "action": "Allow the package",
+          "detail": "Add a publisher or path rule, or sign the package with an allowed certificate."
+        }
+      ]
+    },
+    {
+      "id": "msi-service-unavailable",
+      "title": "Windows Installer service not accessible (1601)",
+      "category": "system",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.85,
+      "regex": [
+        "Error 1601",
+        "Windows Installer service could not be accessed"
+      ],
+      "summary": "The Windows Installer service is missing, disabled or damaged.",
+      "remediation": [
+        {
+          "action": "Check and restart the service",
+          "detail": "",
+          "command": "Get-Service msiserver; Start-Service msiserver"
+        },
+        {
+          "action": "Re-register the service",
+          "detail": "",
+          "command": "msiexec /unregister; msiexec /regserver"
+        },
+        {
+          "action": "Repair the OS image",
+          "detail": "",
+          "command": "DISM /Online /Cleanup-Image /RestoreHealth"
+        }
+      ]
+    },
+    {
+      "id": "msi-temp-folder",
+      "title": "Temp folder is full or inaccessible (1632)",
+      "category": "system",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.85,
+      "regex": [
+        "Error 1632",
+        "Temp folder is either full or inaccessible"
+      ],
+      "summary": "Windows Installer could not use its temp folder.",
+      "remediation": [
+        {
+          "action": "Check free space and permissions on the temp path",
+          "detail": "For SYSTEM this is C:\\Windows\\Temp.",
+          "command": "Get-PSDrive C; icacls C:\\Windows\\Temp"
+        }
+      ]
+    },
+    {
+      "id": "msi-fatal-1603",
+      "title": "Fatal error during installation (1603)",
+      "category": "installer",
+      "severity": "high",
+      "role": "symptom",
+      "weight": 0.35,
+      "regex": [
+        "status: 1603",
+        "Error 1603",
+        "0x80070643",
+        "returning 1603"
+      ],
+      "summary": "1603 is Windows Installer's catch-all failure. It says the install failed, not why - the reason is earlier in the log.",
+      "remediation": [
+        {
+          "action": "Find the first real error",
+          "detail": "Search the log for 'Return value 3' and read upwards."
+        }
+      ]
+    },
+    {
+      "id": "msi-cancelled-1602",
+      "title": "Setup aborted itself (1602)",
+      "category": "installer",
+      "severity": "medium",
+      "role": "symptom",
+      "weight": 0.3,
+      "regex": [
+        "status: 1602",
+        "Error 1602",
+        "returned actual error code 1602",
+        "MainEngineThread is returning 1602"
+      ],
+      "summary": "1602 means 'user cancelled', but setup bootstrappers also use it when they deliberately abort - for example when a prerequisite check fails in silent mode.",
+      "remediation": [
+        {
+          "action": "Look for a prerequisite message",
+          "detail": "Read the lines just before the abort for a 'needs to be installed' or 'not supported' message."
+        }
+      ]
+    }
+  ]
+}
