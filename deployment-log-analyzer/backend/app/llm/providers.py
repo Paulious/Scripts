@@ -6,6 +6,13 @@ from typing import Any
 from .base import LLMError, LLMProvider
 
 
+def _reason(exc: Exception) -> str:
+    """The provider's own error text (for example 'credit balance is too low'). It describes the
+    request, never the log content, so it is safe to show."""
+    msg = str(getattr(exc, "message", "") or exc).strip().replace("\n", " ")
+    return msg[:300]
+
+
 class AnthropicProvider(LLMProvider):
     name = "anthropic"
 
@@ -32,7 +39,7 @@ class AnthropicProvider(LLMProvider):
                 **kwargs,
             )
         except anthropic.APIStatusError as exc:
-            raise LLMError(f"Anthropic API returned {exc.status_code}") from exc
+            raise LLMError(f"Anthropic API returned {exc.status_code}: {_reason(exc)}") from exc
         except anthropic.APIConnectionError as exc:
             raise LLMError("Could not reach the Anthropic API") from exc
 
@@ -62,7 +69,7 @@ class _ChatCompletionsProvider(LLMProvider):
                 response_format={"type": "json_object"},
             )
         except openai.APIStatusError as exc:
-            raise LLMError(f"{self.name} API returned {exc.status_code}") from exc
+            raise LLMError(f"{self.name} API returned {exc.status_code}: {_reason(exc)}") from exc
         except openai.APIConnectionError as exc:
             raise LLMError(f"Could not reach the {self.name} API") from exc
 

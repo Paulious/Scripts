@@ -185,7 +185,7 @@ async def test_anthropic_refusal_and_truncation_raise(stop, msg):
 async def test_anthropic_http_error_becomes_llm_error():
     p = build_provider("anthropic", Settings(_env_file=None, anthropic_api_key="k"),
                        _aclient(lambda r: httpx2.Response(401, json={"type": "error", "error": {"type": "authentication_error", "message": "bad"}})))
-    with pytest.raises(LLMError, match="401"):
+    with pytest.raises(LLMError, match="401: .*bad"):
         await p.complete("s", "u", max_tokens=10)
 
 
@@ -296,3 +296,11 @@ def test_nothing_is_written_to_disk_or_kept_in_memory(client, tmp_path):
     client.post("/api/analyze", files=[("files", ("a.log", b"ERROR boom\n", "text/plain"))], data={"provider": "none"})
     after = set(vars(pl))
     assert before == after  # no module-level state grew
+
+
+@pytest.mark.asyncio
+async def test_provider_error_message_is_surfaced():
+    body = {"type": "error", "error": {"type": "invalid_request_error", "message": "Your credit balance is too low to access the API."}}
+    p = build_provider("anthropic", Settings(_env_file=None, anthropic_api_key="k"), _aclient(lambda r: httpx2.Response(400, json=body)))
+    with pytest.raises(LLMError, match="400: .*credit balance is too low"):
+        await p.complete("s", "u", max_tokens=10)
