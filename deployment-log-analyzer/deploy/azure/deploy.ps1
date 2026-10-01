@@ -40,6 +40,9 @@ param(
     [switch] $SkipAuthSetup,
     [string[]] $AllowedIp = @(),
 
+    # Optional friendly address, e.g. logs.example.com. Create its DNS records first (see README).
+    [string] $CustomDomain,
+
     [int] $MaxUploadMb = 200
 )
 
@@ -103,17 +106,18 @@ Write-Host "Site will be at: $url"
 if (-not $haveAuth -and -not $SkipAuthSetup) {
     Step 'Setting up the Entra app registration for sign-in'
     try {
-        $redirect = "$url/.auth/login/aad/callback"
+        $redirect = @("$url/.auth/login/aad/callback")
+        if ($CustomDomain) { $redirect += "https://$CustomDomain/.auth/login/aad/callback" }
         $found = $null
         try { $found = (& az ad app list --display-name $appName --query '[0].appId' --output tsv 2>$null) } catch { $found = $null }
         if ($found) {
             # Re-running: reuse the registration instead of creating a second one.
             $AuthClientId = (($found -join '')).Trim()
             Write-Host "Reusing the existing app registration $AuthClientId"
-            AzCli ad app update --id $AuthClientId --web-redirect-uris $redirect --enable-id-token-issuance true --output none | Out-Null
+            AzCli ad app update --id $AuthClientId --web-redirect-uris @redirect --enable-id-token-issuance true --output none | Out-Null
         } else {
             $AuthClientId = AzCli ad app create --display-name $appName --sign-in-audience AzureADMyOrg `
-                --web-redirect-uris $redirect --enable-id-token-issuance true --query appId --output tsv
+                --web-redirect-uris @redirect --enable-id-token-issuance true --query appId --output tsv
             AzCli ad sp create --id $AuthClientId --output none | Out-Null
             Write-Host "Created app registration $AuthClientId"
         }
@@ -189,6 +193,24 @@ try {
         --parameters "@$paramFile" --output none | Out-Null
 } finally {
     Remove-Item $paramFile -Force -ErrorAction SilentlyContinue
+}
+
+# --- 5. Custom domain ---------------------------------------------------------------------
+# Redeploying the app resets its host names, so this runs every time.
+if ($CustomDomain) {
+    Step "Attaching $CustomDomain"
+    $proxyApp = "$NamePrefix-proxy"
+    try {
+        $envName = AzCli containerapp env list --resource-group $ResourceGroup --query '[0].name' --output tsv
+        AzCli containerapp hostname add --resource-group $ResourceGroup --name $proxyApp --hostname $CustomDomain --output none | Out-Null
+        AzCli containerapp hostname bind --resource-group $ResourceGroup --name $proxyApp --hostname $CustomDomain `
+            --environment $envName --validation-method CNAME --output none | Out-Null
+        $url = "https://$CustomDomain"
+        Write-Host "$CustomDomain is attached with a free Azure certificate."
+    } catch {
+        Write-Host "Could not attach $CustomDomain yet: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "Check the DNS records (CNAME to $fqdn and TXT asuid.<name>, both 'DNS only' in Cloudflare), then run this script again." -ForegroundColor Yellow
+    }
 }
 
 # --- Done ---------------------------------------------------------------------------------

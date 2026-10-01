@@ -119,3 +119,11 @@ Troubleshooting:
 - **Image pull errors straight after deploying:** the registry permission can take a minute or two to apply. Run `deploy.ps1` again.
 - **Redirect URI mismatch at sign-in:** the redirect URI on the app registration must match the site address exactly, including `/.auth/login/aad/callback`.
 - **Sign-in works but you get a 403:** you are not assigned to the app, or your IP is not on the allow-list.
+
+## Using your own address
+
+To use something like `logs.example.com` instead of the long Azure address:
+
+1. Get the two values: the current site address (`az containerapp show -g <group> -n dla-proxy --query properties.configuration.ingress.fqdn -o tsv`) and the verification code (`... --query properties.customDomainVerificationId -o tsv`).
+2. In your DNS add a CNAME `logs` pointing at the site address, and a TXT record `asuid.logs` holding the verification code. If you use Cloudflare, set both to **DNS only** (grey cloud). Azure cannot issue its certificate through the proxy, and Cloudflare's proxy also cuts long requests and large uploads.
+3. Run the deploy script with `-CustomDomain logs.example.com`. It attaches the name, gets the certificate and adds the sign-in redirect address. Keep the option on every later run, because a redeploy resets host names.
