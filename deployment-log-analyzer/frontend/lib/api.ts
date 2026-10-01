@@ -91,7 +91,17 @@ function postStream(opts: StreamOptions): Promise<void> {
       if (!finished) reject(new Error("The connection closed before the analysis finished"));
       else resolve();
     };
-    xhr.onerror = () => reject(new Error("Could not reach the analysis service. Check that the backend is running."));
+    xhr.onerror = () => {
+      // Say how far it got: that tells us whether the request never arrived or the stream was cut part way.
+      const got = xhr.responseText.length;
+      const where =
+        xhr.readyState <= 1
+          ? "The request never got a reply (nothing came back)."
+          : got > 0
+            ? `The connection dropped part way through the reply (${Math.round(got / 1024)} KB received).`
+            : "The connection dropped before any progress was received.";
+      reject(new Error(`Could not reach the analysis service. ${where} Check the backend is running and look at its logs.`));
+    };
     xhr.onabort = () => reject(new DOMException("Cancelled", "AbortError"));
     opts.signal.addEventListener("abort", () => xhr.abort());
     xhr.send(opts.body);
