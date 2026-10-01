@@ -133,3 +133,17 @@ async def test_same_problem_in_many_logs_is_one_finding_and_cabinet_copies_are_s
     reasons = [s["reason"] for s in result["skipped"]]
     assert any("copy of a log" in r for r in reasons)
     assert all(".cab/" not in f["path"] for f in result["files"])
+
+
+def test_hash_mismatch_is_not_reported_for_unrelated_logs():
+    p = get_library().get("intune-hash-mismatch")
+    line = "Defender MOF hash mismatch. Current: febff51d, Stored: (null). Re-registering..."
+    assert p.applies_to and "generic" not in p.applies_to
+    assert "intune_ime" in p.applies_to
+
+
+def test_defender_bundle_is_read_last_and_briefly():
+    from app.patterns.triage import classify
+    d = classify("(65) FoldersFiles ProgramData_Microsoft_Windows_Defender_Support_MpSupportFiles_cab/mpsupportfiles.cab/C_/x/MPLog.log")
+    assert d.tier == "low" and d.max_lines == 15000
+    assert classify("(62) Events System Events.evtx").tier == "normal"

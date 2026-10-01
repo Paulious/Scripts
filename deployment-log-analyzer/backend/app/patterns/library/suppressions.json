@@ -71,6 +71,11 @@
       "reason": "Exit codes from detection and remediation scripts. For these, a non-zero code usually means 'not compliant' or 'not detected', which is a result, not a failure."
     },
     {
+      "id": "evt-wmi-5858",
+      "regex": "Microsoft-Windows-WMI-Activity \\[5858\\]",
+      "reason": "WMI query failures (event 5858). Software probes WMI constantly and many of these are harmless."
+    },
+    {
       "id": "evt-dcom-10016",
       "regex": "Microsoft-Windows-DistributedCOM \\[10016\\]",
       "reason": "DCOM permission warnings (event 10016). Windows logs these constantly and they are almost never the cause of anything."

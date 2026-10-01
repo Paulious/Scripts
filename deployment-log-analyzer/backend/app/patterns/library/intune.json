@@ -83,6 +83,10 @@
         "ERROR_FILE_CORRUPT"
       ],
       "summary": "The downloaded content does not match its expected hash. It was corrupted in transit or altered by something in the path.",
+      "applies_to": [
+        "intune_ime",
+        "patchmypc_scriptrunner"
+      ],
       "remediation": [
         {
           "action": "Retry the download",

@@ -48,7 +48,7 @@ class FileScan:
 
 
 # Output of a diagnostic command or an exported registry key: words like "error" or "Failed" there are data, not log levels.
-_DATA_FILE = re.compile(r"\)\s*(?:Command|RegistryKey)\s", re.IGNORECASE)
+_DATA_FILE = re.compile(r"\)\s*(?:Command|RegistryKey)\s|windows_defender_support|mpsupportfiles|msinfo32", re.IGNORECASE)
 
 
 def scan_entries(scan: FileScan, lib: PatternLibrary) -> None:
@@ -301,7 +301,8 @@ def merge_across_files(findings: list[Finding]) -> tuple[list[Finding], int]:
             primary.other_files = [f.file for f in rest][:MAX_OTHER_FILES]
             primary.match_count += sum(f.match_count for f in rest)
             primary.attempts += sum(f.attempts for f in rest)
-            stamps = [t for f in group for t in (f.first_timestamp, f.last_timestamp) if t]
+            # Settings dumps carry dates that are not when anything happened, so only real logs set the time range.
+            stamps = [t for f in group if not f.file.lower().endswith((".reg", ".xml", ".json", ".html", ".htm", ".txt")) for t in (f.first_timestamp, f.last_timestamp) if t]
             if stamps:
                 primary.first_timestamp, primary.last_timestamp = min(stamps), max(stamps)
             for f in rest:

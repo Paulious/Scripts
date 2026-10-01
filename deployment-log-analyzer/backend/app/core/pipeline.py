@@ -7,6 +7,7 @@ browser as newline-delimited JSON, so no job store or database is needed.
 from __future__ import annotations
 
 import asyncio
+import posixpath
 import re
 import time
 from collections import Counter, defaultdict
@@ -148,12 +149,19 @@ def build_plan(members: list[Member]) -> tuple[list[PlanItem], list[SkippedFile]
     # doubles every finding, so a cabinet copy is skipped when a loose file with the same name and
     # about the same size is in the package.
     loose: dict[str, list[int]] = defaultdict(list)
+    same_size: set[tuple[str, int]] = set()
     for it in items:
         if ".cab/" not in it.path.lower():
             loose[_base(it.path)].append(it.member.size)
+            if it.member.size > 4096:
+                same_size.add((posixpath.splitext(it.path.lower())[1], it.member.size))
     copies: set[int] = set()
     for it in items:
-        if ".cab/" in it.path.lower() and any(abs(sz - it.member.size) <= 0.15 * max(sz, it.member.size, 1) for sz in loose.get(_base(it.path), [])):
+        in_cab = ".cab/" in it.path.lower()
+        if in_cab and (
+            any(abs(sz - it.member.size) <= 0.15 * max(sz, it.member.size, 1) for sz in loose.get(_base(it.path), []))
+            or (posixpath.splitext(it.path.lower())[1], it.member.size) in same_size
+        ):
             copies.add(id(it))
             skipped.append(SkippedFile(path=it.path, reason="copy of a log that is already in the package; the loose file was read"))
     items = [it for it in items if id(it) not in copies]
