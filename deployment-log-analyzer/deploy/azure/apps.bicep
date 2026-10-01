@@ -85,8 +85,8 @@ resource api 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'api'
           image: '${acrLoginServer}/dla-api:${imageTag}'
-          // Files are processed in memory, so give the API room.
-          resources: { cpu: json('1.0'), memory: '2Gi' }
+          // Files are processed in memory, so give the API room. Large diagnostics packages are read one file at a time.
+          resources: { cpu: json('2.0'), memory: '4Gi' }
           env: concat(apiEnvBase, apiEnvAnthropic, apiEnvAzure)
           probes: [
             {

@@ -117,8 +117,11 @@ def build_report(r: AnalysisResult) -> str:
     md += ["", "## Files analysed", "", "| File | Detected as | Lines | Errors | Warnings |", "|---|---|---|---|---|"]
     for f in r.files:
         md.append(f"| {_cell(f.path)} | {f.log_type_label} | {f.line_count:,} | {f.error_count} | {f.warning_count} |")
-    if r.skipped:
-        md += ["", "Skipped: " + "; ".join(f"{s.path} ({s.reason})" for s in r.skipped[:15])]
+    if r.skipped_groups:
+        md += ["", "Not read:", ""]
+        for g in r.skipped_groups:
+            names = ", ".join(g.examples) + (", ..." if g.count > len(g.examples) else "")
+            md.append(f"- {g.count} file{'s' if g.count != 1 else ''}: {g.reason}" + (f" ({names})" if names else ""))
 
     if a.further_data:
         md += ["", "## Data that would help", ""] + [f"- {x}" for x in a.further_data]

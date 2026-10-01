@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from .base import LogEntry, LogParser, ParsedLog
 from .cmtrace import CMTraceParser
+from .dsregcmd import DsregcmdParser
 from .generic import GenericTextParser, PsadtParser
 from .intune import IntuneImeParser
 from .msi import DellDupParser, MsiVerboseParser
@@ -14,6 +15,7 @@ from .patchmypc import PatchMyPCDetectionParser, PatchMyPCScriptRunnerParser
 PARSERS: list[type[LogParser]] = [
     PatchMyPCScriptRunnerParser,
     PatchMyPCDetectionParser,
+    DsregcmdParser,
     IntuneImeParser,
     DellDupParser,
     MsiVerboseParser,

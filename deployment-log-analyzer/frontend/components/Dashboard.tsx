@@ -203,7 +203,7 @@ export function Dashboard({ pattern, ai, view, onView, config, aiStatus, aiMessa
       </div>
 
       <FindingsTable findings={result.findings} rootIds={rc?.finding_ids ?? []} />
-      <FilesTable files={result.files} skipped={result.skipped} />
+      <FilesTable files={result.files} groups={result.skipped_groups} />
 
       {result.suppressed.length > 0 && (
         <Card>

@@ -72,6 +72,17 @@ If a provider call fails (rate limit, refusal, bad JSON), the user still gets th
 
 If your policy says log data must not leave your tenant, use Azure OpenAI in your own subscription, or leave the provider on "pattern library only".
 
+## Large diagnostics packages
+
+An Intune "Collect diagnostics" package can be several hundred MB of mostly noise. The app does not load it all at once:
+
+- Files are listed first and read **one at a time**, so memory stays close to the size of the upload itself.
+- `backend/app/patterns/library/triage.json` decides what is worth reading. **High** priority files (Intune Management Extension logs, `dsregcmd` output, Windows Update and servicing logs, installer logs) are read first. **Low** priority files (agent logs, update orchestrator logs, registry exports) are capped to the newest few files and the last N lines. Binary files are skipped with a reason shown in the results.
+- Every file is limited to the last `MAX_LINES_PER_FILE` lines, and the whole run stops reading after `MAX_TOTAL_LINES` lines or `TIME_BUDGET_SECONDS` seconds, always high priority first. Line numbers in the evidence are those of the original file.
+- Scanning uses a plain-text pre-check so that most lines never reach a regex (about 25,000 lines per second in testing on a 490 MB package, with the peak memory about 30 MB above the size of the upload).
+
+Not read yet: Windows event logs (`.evtx`), `.cab` archives (the MDM diagnostics report is inside one) and `.etl` traces. The results page lists everything that was skipped and why.
+
 ## Adding patterns
 
 Patterns live in `backend/app/patterns/library/*.json`. A pattern looks like this:
@@ -105,7 +116,7 @@ Create a class in `backend/app/parsers/`, subclass `LogParser`, implement `detec
 
 ## Limits
 
-Configured in `backend/.env`: `MAX_UPLOAD_MB` (200), `MAX_EXTRACTED_MB` (600), `MAX_FILE_MB` (100), `MAX_FILES` (1000). Not supported yet: 7z, RAR and CAB archives (it tells the user to re-zip), and binary `.evtx` / `.etl` files (export to text first).
+Configured in `backend/.env`: `MAX_UPLOAD_MB` (200), `MAX_EXTRACTED_MB` (600), `MAX_FILE_MB` (100), `MAX_FILES` (1000). Not supported yet: 7z, RAR and CAB archives, and binary `.evtx` / `.etl` files. They are skipped and listed.
 
 ## API
 

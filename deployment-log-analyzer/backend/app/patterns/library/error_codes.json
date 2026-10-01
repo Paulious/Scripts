@@ -48,6 +48,14 @@
     "0x800B0101": "A required certificate is not within its validity period",
     "0x800B0109": "Certificate chain ends in a root that is not trusted",
     "0x80096010": "File digest is invalid (altered or corrupt file)",
-    "0x87D1041C": "Intune: app was not detected after installation"
+    "0x87D1041C": "Intune: app was not detected after installation",
+    "0x80240034": "Windows Update: the download failed",
+    "0x8024402C": "Windows Update: could not resolve the update server name (DNS or proxy)",
+    "0x80244022": "Windows Update: the update service returned HTTP 503 (unavailable)",
+    "0x800F0922": "Servicing stack failure (CBS_E_INSTALLERS_FAILED), often low space, VPN or a small system partition",
+    "0x800F081F": "Servicing: source files could not be found",
+    "0x80073712": "Servicing: component store is corrupt or a manifest is missing",
+    "0x801C03F2": "Entra ID: device object not found (deleted or disabled) during device authentication",
+    "0x801C0003": "Entra ID: the user is not authorised to join the device"
   }
 }

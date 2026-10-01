@@ -39,6 +39,12 @@ class SkippedFile(BaseModel):
     reason: str
 
 
+class SkippedGroup(BaseModel):
+    reason: str
+    count: int
+    examples: list[str] = Field(default_factory=list)
+
+
 class EvidenceLine(BaseModel):
     n: int
     text: str
@@ -156,6 +162,7 @@ class AnalysisResult(BaseModel):
     stats: Stats
     files: list[LogFileInfo]
     skipped: list[SkippedFile]
+    skipped_groups: list[SkippedGroup] = Field(default_factory=list)
     findings: list[Finding]
     suppressed: list[SuppressedNoise]
     analysis: Analysis

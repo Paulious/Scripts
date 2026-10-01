@@ -10,7 +10,7 @@ This puts the analyzer on Azure Container Apps, behind Microsoft Entra sign-in, 
 | Container Apps environment | Where the apps run. |
 | `dla-proxy` app | The only thing reachable from the internet. Sends `/` to the website and `/api` to the analysis service, so there is one address and one sign-in. |
 | `dla-web` app | The website. Internal only. |
-| `dla-api` app | The analysis service. Internal only. 1 CPU and 2 GB of memory, because uploaded files are handled in memory. |
+| `dla-api` app | The analysis service. Internal only. 2 CPUs and 4 GB of memory, because uploaded files are handled in memory. |
 | Managed identity | Lets the apps pull images from the registry without a password. Also used to call Azure OpenAI if you choose that. |
 | Log Analytics workspace | Platform logs, kept for 30 days. |
 

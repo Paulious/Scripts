@@ -23,6 +23,12 @@ export interface SkippedFile {
   reason: string;
 }
 
+export interface SkippedGroup {
+  reason: string;
+  count: number;
+  examples: string[];
+}
+
 export interface EvidenceLine {
   n: number;
   text: string;
@@ -132,6 +138,7 @@ export interface AnalysisResult {
   stats: Stats;
   files: LogFileInfo[];
   skipped: SkippedFile[];
+  skipped_groups: SkippedGroup[];
   findings: Finding[];
   suppressed: SuppressedNoise[];
   analysis: Analysis;

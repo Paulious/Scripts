@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import type { LogFileInfo, SkippedFile } from "@/lib/types";
+import type { LogFileInfo, SkippedGroup } from "@/lib/types";
 import { bytes } from "@/lib/format";
 import { Badge, Card, CardHeader, Icon } from "./ui";
 
-export function FilesTable({ files, skipped }: { files: LogFileInfo[]; skipped: SkippedFile[] }) {
+export function FilesTable({ files, groups }: { files: LogFileInfo[]; groups: SkippedGroup[] }) {
   const [open, setOpen] = useState<string | null>(null);
   return (
     <Card>
@@ -32,10 +32,20 @@ export function FilesTable({ files, skipped }: { files: LogFileInfo[]; skipped: 
           </tbody>
         </table>
       </div>
-      {skipped.length > 0 && (
-        <div className="border-t border-line px-5 py-3 text-xs text-subtle">
-          <span className="font-semibold">Skipped:</span> {skipped.slice(0, 8).map((s) => `${s.path} (${s.reason})`).join("; ")}
-          {skipped.length > 8 ? ` and ${skipped.length - 8} more` : ""}
+      {groups.length > 0 && (
+        <div className="border-t border-line px-5 py-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-subtle">Not read</h3>
+          <ul className="mt-2 space-y-1.5 text-sm">
+            {groups.map((g) => (
+              <li key={g.reason} className="flex gap-3">
+                <span className="w-10 shrink-0 text-right font-semibold tabular-nums">{g.count}</span>
+                <span className="min-w-0">
+                  {g.reason}
+                  {g.examples.length > 0 && <span className="text-faint"> ({g.examples.join(", ")}{g.count > g.examples.length ? ", ..." : ""})</span>}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </Card>
@@ -49,7 +59,12 @@ function FileRow({ f, facts, isOpen, toggle }: { f: LogFileInfo; facts: [string,
         <td className="max-w-[22rem] px-5 py-2.5">
           <div className="flex items-center gap-2">
             {facts.length ? <Icon.Chevron className={`text-subtle transition-transform ${isOpen ? "rotate-90" : ""}`} /> : <span className="w-4" />}
-            <span className="truncate font-medium" title={f.path}>{f.path}</span>
+            <span className="min-w-0">
+              <span className="block truncate font-medium" title={f.path}>{f.path.split("/").pop()}</span>
+              {f.path.includes("/") && (
+                <span className="block truncate text-xs text-faint">{f.path.split("/").slice(0, -1).join("/").replace(/^\(\d+\)\s+(?:FoldersFiles|Command|RegistryKey|Events)\s+/, "")}</span>
+              )}
+            </span>
           </div>
         </td>
         <td className="px-3 py-2.5">

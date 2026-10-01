@@ -43,7 +43,10 @@ class Settings(BaseSettings):
     max_file_mb: int = 100
     max_files: int = 1000
     max_archive_depth: int = 3
-    max_lines_per_file: int = 1_000_000
+    max_lines_per_file: int = 400_000
+    # Big diagnostics packages: read the important files first, then stop at these limits.
+    max_total_lines: int = 1_500_000
+    time_budget_seconds: float = 150.0
 
     # --- Analysis ------------------------------------------------------
     evidence_context_lines: int = 100

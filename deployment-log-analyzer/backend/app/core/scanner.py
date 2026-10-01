@@ -44,26 +44,41 @@ class FileScan:
     detection_confidence: float = 0.0
     truncated: bool = False
     facts: dict = field(default_factory=dict)
+    offset: int = 0  # lines dropped from the top; displayed line numbers stay those of the original file
 
 
 def scan_entries(scan: FileScan, lib: PatternLibrary) -> None:
-    patterns = lib.for_log_type(scan.log_type)
+    table, residual = lib.prefilter(scan.log_type)
+    order = {p.id: i for i, p in enumerate(lib.for_log_type(scan.log_type))}
+    any_noise = lib.suppress_any.search
     claimed: set[tuple[int, Role]] = set()
     for idx, entry in enumerate(scan.entries):
         text = entry.text
         if not text.strip():
             continue
-        sup = lib.suppression_for(text)
-        if sup:
-            scan.suppressed[sup.id] += 1
-            scan.suppressed_example.setdefault(sup.id, text.strip()[:200])
-            continue
+        # Almost every line is routine, so the cheap checks come first.
+        if any_noise(text):
+            sup = lib.suppression_for(text)
+            if sup:
+                scan.suppressed[sup.id] += 1
+                scan.suppressed_example.setdefault(sup.id, text.strip()[:200])
+                continue
         if entry.level == ERROR:
             scan.errors += 1
         elif entry.level == WARNING:
             scan.warnings += 1
+
+        low = text.lower()
+        candidates: dict[str, PatternDef] = {}
+        for lit, pats in table:
+            if lit in low:
+                for p in pats:
+                    candidates[p.id] = p
+        for p in residual:
+            candidates[p.id] = p
+
         hit_any = False
-        for p in patterns:
+        for p in sorted(candidates.values(), key=lambda p: order[p.id]):
             key = (idx, p.role)
             if key in claimed:
                 continue
@@ -97,11 +112,13 @@ def _trim(text: str, limit: int) -> str:
 
 def build_window(scan: FileScan, match_lines: set[int], anchor: int, settings: Settings) -> EvidenceWindow:
     ctx = settings.evidence_context_lines
-    start = max(1, anchor - ctx)
-    end = min(len(scan.lines), anchor + ctx)
+    first = scan.offset + 1
+    last = scan.offset + len(scan.lines)
+    start = max(first, anchor - ctx)
+    end = min(last, anchor + ctx)
     lines: list[EvidenceLine] = []
     for n in range(start, end + 1):
-        raw = scan.lines[n - 1]
+        raw = scan.lines[n - scan.offset - 1]
         lines.append(EvidenceLine(
             n=n,
             text=_trim(raw, settings.max_line_chars),
@@ -201,6 +218,37 @@ def collect_suppressed(scans: list[FileScan], lib: PatternLibrary) -> list[Suppr
         SuppressedNoise(id=k, reason=reasons.get(k, ""), count=n, example=example.get(k, ""))
         for k, n in total.most_common()
     ]
+
+
+_HOT = re.compile(r"\.(?:log|txt|xml|json|csv|etl|evtx|cab|reg|html?)\b", re.IGNORECASE)
+_TOKEN = re.compile(r"[\w\-. ]{6,120}?\.(?:log|txt|xml|json|csv|etl|evtx|cab|reg|html?)\b", re.IGNORECASE)
+
+
+def mentioned_files(lines: list[str], limit: int = 300) -> set[str]:
+    """File names a log refers to (ScriptRunner names the installer log it launched).
+    Computed while the file is in memory so the lines can be dropped afterwards."""
+    found: set[str] = set()
+    hot = _HOT.search
+    for ln in lines:
+        if not hot(ln):
+            continue
+        for m in _TOKEN.findall(ln):
+            found.add(m.strip().rsplit("\\", 1)[-1].lower())
+            if len(found) >= limit:
+                return found
+    return found
+
+
+def link_by_mentions(mentions: dict[str, set[str]]) -> dict[str, set[str]]:
+    """Symmetric links between logs where one names the other."""
+    names = {path: path.replace("\\", "/").rsplit("/", 1)[-1].lower() for path in mentions}
+    links: dict[str, set[str]] = defaultdict(set)
+    for path, tokens in mentions.items():
+        for other, base in names.items():
+            if other != path and len(base) >= 6 and any(base == t or base in t for t in tokens):
+                links[path].add(other)
+                links[other].add(path)
+    return links
 
 
 def link_files(scans: list[FileScan]) -> dict[str, set[str]]:

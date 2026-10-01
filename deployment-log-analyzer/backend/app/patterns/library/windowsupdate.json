@@ -1,0 +1,96 @@
+{
+  "domain": "Windows Update and servicing",
+  "patterns": [
+    {
+      "id": "wu-install-failure",
+      "title": "Windows Update failed to install an update",
+      "category": "windows-update",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.85,
+      "regex": [
+        "Installation Failure: Windows failed to install the following update with error (?P<detail>0x[0-9a-fA-F]+)"
+      ],
+      "summary": "Windows Update tried to install an update and failed with {detail}.",
+      "remediation": [
+        {
+          "action": "Look up the error code",
+          "detail": "The code in the finding explains the usual reason. 0x800f0922 and 0x800f081f are common servicing failures."
+        },
+        {
+          "action": "Repair the servicing stack and component store",
+          "detail": "",
+          "command": "DISM /Online /Cleanup-Image /RestoreHealth; sfc /scannow"
+        },
+        {
+          "action": "Check free space and pending restarts",
+          "detail": "Low disk space or a pending restart blocks many updates."
+        }
+      ]
+    },
+    {
+      "id": "wu-download-failure",
+      "title": "Windows Update failed to download",
+      "category": "windows-update",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.7,
+      "regex": [
+        "Download Failure[^\\r\\n]{0,160}",
+        "Windows Update (?:failed|could not) (?:to )?download[^\\r\\n]{0,160}"
+      ],
+      "summary": "Windows Update could not download content.",
+      "remediation": [
+        {
+          "action": "Check connectivity to the update service",
+          "detail": "DNS, proxy and firewall rules for Windows Update or the Delivery Optimization groups."
+        },
+        {
+          "action": "Check free space",
+          "detail": "Downloads are staged on the system drive."
+        }
+      ]
+    },
+    {
+      "id": "wu-error-code",
+      "title": "Windows Update error code",
+      "category": "windows-update",
+      "severity": "medium",
+      "role": "cause",
+      "weight": 0.55,
+      "regex": [
+        "(?:error|code|failure)[^\\r\\n]{0,40}(?P<detail>0x8024[0-9a-fA-F]{4})"
+      ],
+      "summary": "Windows Update reported {detail}.",
+      "remediation": [
+        {
+          "action": "Look up the code",
+          "detail": "0x8024xxxx codes are Windows Update agent errors. The finding shows the meaning when it is a well-known one."
+        }
+      ]
+    },
+    {
+      "id": "cbs-hresult",
+      "title": "Servicing (CBS) error",
+      "category": "windows-update",
+      "severity": "medium",
+      "role": "cause",
+      "weight": 0.6,
+      "regex": [
+        "HRESULT\\s*=\\s*(?P<detail>0x800f[0-9a-fA-F]{4}|0x80073712)"
+      ],
+      "summary": "The Windows servicing stack logged {detail}.",
+      "remediation": [
+        {
+          "action": "Repair the component store",
+          "detail": "",
+          "command": "DISM /Online /Cleanup-Image /RestoreHealth"
+        },
+        {
+          "action": "Provide a source if files are missing",
+          "detail": "0x800f081f means the source files were not found; point DISM at matching Windows media."
+        }
+      ]
+    }
+  ]
+}

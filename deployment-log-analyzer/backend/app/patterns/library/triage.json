@@ -1,0 +1,23 @@
+{
+  "rules": [
+    {"id": "etl", "match": "\\.etl$", "tier": "skip", "reason": "binary trace log (needs a Windows tool to convert it)"},
+    {"id": "evtx", "match": "\\.evtx$", "tier": "skip", "reason": "Windows event logs are not read yet"},
+    {"id": "cab", "match": "\\.cab$", "tier": "skip", "reason": "CAB archives are not opened yet"},
+    {"id": "dump", "match": "\\.(dmp|mdmp)$", "tier": "skip", "reason": "memory dump"},
+    {"id": "not-collected", "match": "no results - error", "tier": "skip", "reason": "item was not present on the device when the package was collected"},
+
+    {"id": "ime", "match": "intunemanagementextension|appworkload|agentexecutor|healthscripts|clienthealth|appactionprocessor|win32appinventory", "tier": "high", "max_lines": 600000},
+    {"id": "installers", "match": "patchmypcinstalllogs|patchmypcintunelogs|psadt|\\.msi\\.log$", "tier": "high"},
+    {"id": "identity", "match": "dsregcmd", "tier": "high"},
+    {"id": "mdm", "match": "mdmdiag|mdmlogs|enrollments", "tier": "high"},
+    {"id": "windows-update", "match": "reportingevents|windowsupdate\\.log|cbs[\\\\_/ ]?cbs|\\\\cbs\\.log|setupact|setuperr|panther", "tier": "high"},
+
+    {"id": "epm", "match": "epm_agent_logs", "tier": "low", "max_files": 6, "max_lines": 30000, "reason": "Endpoint Privilege Management agent logs are large; only the newest files were read"},
+    {"id": "uso", "match": "usoshared", "tier": "low", "max_files": 4, "max_lines": 30000, "reason": "Update Session Orchestrator logs are large; only the newest files were read"},
+    {"id": "measuredboot", "match": "measuredboot", "tier": "low", "max_files": 3, "max_lines": 5000, "reason": "measured boot logs are rarely useful for app and policy problems"},
+    {"id": "inventory", "match": "device_inventory_agent|sensorframework|diagnosticlogcsp", "tier": "low", "max_files": 3, "max_lines": 20000, "reason": "inventory and telemetry logs"},
+    {"id": "temp-logs", "match": "windir_temp_", "tier": "low", "max_files": 10, "max_lines": 20000, "reason": "miscellaneous logs from the Windows temp folder"},
+    {"id": "registry", "match": "\\.reg$", "tier": "low", "max_lines": 20000, "reason": "registry exports are mostly settings, not events"},
+    {"id": "html", "match": "\\.html?$", "tier": "low", "max_lines": 5000, "reason": "HTML report (read as plain text)"}
+  ]
+}

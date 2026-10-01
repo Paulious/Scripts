@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.config import get_settings
 from app.models import Role, Severity
+from app.patterns.literals import required_literals
 
 LIBRARY_DIR = Path(__file__).parent / "library"
 _HEX = re.compile(r"\b0x[0-9A-Fa-f]{8}\b")
@@ -114,6 +115,51 @@ class PatternLibrary:
         if log_type not in self._by_type:
             self._by_type[log_type] = [p for p in self.patterns if not p.applies_to or log_type in p.applies_to]
         return self._by_type[log_type]
+
+    def any_hit(self, log_type: str) -> re.Pattern:
+        """One regex that matches if *any* pattern for this log type could match.
+
+        Most log lines match nothing, so testing one combined regex first is far cheaper than
+        trying every pattern on every line. Named groups are stripped because a name can only
+        appear once in a regex."""
+        cache = self.__dict__.setdefault("_any", {})
+        if log_type not in cache:
+            parts = [f"(?:{rx.replace('(?P<detail>', '(?:')})" for pat in self.for_log_type(log_type) for rx in pat.regex]
+            cache[log_type] = re.compile("|".join(parts), re.IGNORECASE)
+        return cache[log_type]
+
+    def prefilter(self, log_type: str) -> tuple[tuple[tuple[str, tuple["PatternDef", ...]], ...], tuple["PatternDef", ...]]:
+        """((literal, patterns that need it), ...) plus the patterns with no safe literal.
+
+        A line can only match a pattern if its lower-cased text contains one of that pattern's
+        literals. The scanner checks the literals with plain substring tests and then runs only
+        the patterns attached to the literals it found."""
+        cache = self.__dict__.setdefault("_pre", {})
+        if log_type not in cache:
+            by_lit: dict[str, list[PatternDef]] = {}
+            residual: list[PatternDef] = []
+            for pat in self.for_log_type(log_type):
+                needs_full = False
+                for rx in pat.regex:
+                    got = required_literals(rx)
+                    if got is None:
+                        needs_full = True
+                    else:
+                        for lit in got:
+                            if pat not in by_lit.setdefault(lit, []):
+                                by_lit[lit].append(pat)
+                if needs_full and pat not in residual:
+                    residual.append(pat)
+            table = tuple((lit, tuple(pats)) for lit, pats in sorted(by_lit.items(), key=lambda kv: -len(kv[0])))
+            cache[log_type] = (table, tuple(residual))
+        return cache[log_type]
+
+    @property
+    def suppress_any(self) -> re.Pattern:
+        cache = self.__dict__.setdefault("_sup_any", [])
+        if not cache:
+            cache.append(re.compile("|".join(f"(?:{s.regex})" for s in self.suppressions), re.IGNORECASE))
+        return cache[0]
 
     def suppression_for(self, text: str) -> SuppressionDef | None:
         for s in self.suppressions:

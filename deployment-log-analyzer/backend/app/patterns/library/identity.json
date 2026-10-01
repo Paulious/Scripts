@@ -1,0 +1,103 @@
+{
+  "domain": "Device identity (dsregcmd)",
+  "patterns": [
+    {
+      "id": "dsreg-device-auth-failed",
+      "title": "Device failed to authenticate to Entra ID",
+      "category": "identity",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.9,
+      "regex": [
+        "DeviceAuthStatus\\s*:\\s*FAILED(?P<detail>[^\\r\\n]*)"
+      ],
+      "summary": "dsregcmd reports that the device could not authenticate to Entra ID{detail}. Without device authentication, sign-in, Conditional Access and Intune check-in can all fail.",
+      "applies_to": [
+        "dsregcmd"
+      ],
+      "remediation": [
+        {
+          "action": "Check the device object in Entra ID",
+          "detail": "Look the device up by name and ID. A disabled or deleted device object is the usual reason for this message."
+        },
+        {
+          "action": "Re-register the device",
+          "detail": "If the object is gone, remove the stale state and join again (Autopilot devices: re-import the hardware hash and reset).",
+          "command": "dsregcmd /leave"
+        },
+        {
+          "action": "For hybrid join, check sync",
+          "detail": "Confirm the device is in the sync scope and has synchronised to Entra ID."
+        }
+      ]
+    },
+    {
+      "id": "dsreg-registration-error",
+      "title": "Device registration failed",
+      "category": "identity",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.75,
+      "regex": [
+        "Attempt Status\\s*:\\s*(?P<detail>(?:Client|Server) error[^\\r\\n]*)"
+      ],
+      "summary": "The last device registration attempt failed: {detail}.",
+      "applies_to": [
+        "dsregcmd"
+      ],
+      "remediation": [
+        {
+          "action": "Look up the error code",
+          "detail": "The code names the exact reason (see the code meaning in the finding if known)."
+        },
+        {
+          "action": "Check connectivity and time",
+          "detail": "Registration needs access to the Microsoft device registration endpoints and a correct clock."
+        }
+      ]
+    },
+    {
+      "id": "dsreg-not-joined",
+      "title": "Device is not Entra joined",
+      "category": "identity",
+      "severity": "low",
+      "role": "symptom",
+      "weight": 0.3,
+      "regex": [
+        "AzureAdJoined\\s*:\\s*NO"
+      ],
+      "summary": "dsregcmd shows AzureAdJoined = NO. That is expected for an on-premises domain-only device, but not for an Intune or Autopilot managed one.",
+      "applies_to": [
+        "dsregcmd"
+      ],
+      "remediation": [
+        {
+          "action": "Confirm the join type you expect",
+          "detail": "Entra joined, hybrid joined and registered devices look different here. Check DomainJoined and EnterpriseJoined alongside."
+        }
+      ]
+    },
+    {
+      "id": "dsreg-tpm-not-protected",
+      "title": "Device keys are not protected by the TPM",
+      "category": "identity",
+      "severity": "low",
+      "role": "cause",
+      "weight": 0.35,
+      "regex": [
+        "TpmProtected\\s*:\\s*NO"
+      ],
+      "summary": "The device keys are not TPM protected. Some join and Conditional Access scenarios require that.",
+      "applies_to": [
+        "dsregcmd"
+      ],
+      "remediation": [
+        {
+          "action": "Check the TPM",
+          "detail": "Confirm the TPM is present, enabled and ready.",
+          "command": "Get-Tpm"
+        }
+      ]
+    }
+  ]
+}
