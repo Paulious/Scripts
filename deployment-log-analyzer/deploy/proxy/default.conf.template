@@ -1,0 +1,46 @@
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    listen 8080;
+    server_name _;
+
+    # Nothing about the traffic is worth keeping. File names and contents are never in the URL,
+    # but there is still no reason to write an access log.
+    access_log off;
+    error_log  /dev/stderr warn;
+
+    # Uploads stream straight through; nginx does not hold them in memory or on disk.
+    client_max_body_size ${MAX_UPLOAD_MB}m;
+    proxy_request_buffering off;
+    # Progress events must reach the browser as they happen.
+    proxy_buffering off;
+    proxy_http_version 1.1;
+    proxy_connect_timeout 30s;
+    proxy_read_timeout    900s;
+    proxy_send_timeout    900s;
+
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+    proxy_set_header X-Forwarded-Host  $host;
+
+    location = /healthz {
+        default_type text/plain;
+        return 200 "ok";
+    }
+
+    location /api/ {
+        # Container Apps routes internal traffic by host name, so send the target's name.
+        proxy_set_header Host ${API_HOST};
+        proxy_pass http://${API_HOST};
+    }
+
+    location / {
+        proxy_set_header Host ${WEB_HOST};
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_pass http://${WEB_HOST};
+    }
+}

@@ -4,6 +4,14 @@ Upload the logs from a failed Intune or Windows app deployment and get back the 
 
 It was built and tested against real Patch My PC logs (ScriptRunner, detection script, MSI verbose logs and Dell Update Package logs). On that set it picked out one real failure in 10,500 lines of mostly harmless noise: Dell Command Update 5.7.2 refusing to install because the .NET Desktop Runtime 10 was missing.
 
+## How you use it
+
+1. Drop in your logs. The first pass uses the built-in pattern library only. Nothing goes to any AI service, and you get findings, evidence and a confidence score straight away.
+2. If that is enough, export the report.
+3. If you want a fuller write-up, click **Add AI analysis** on the results page. The findings and surrounding log lines (not your whole files) go to the AI provider you pick, and a second analysis appears. A switch at the top flips between the two. The evidence is shared, so only the written analysis changes.
+
+The server still keeps nothing between steps: your browser holds the first result and sends it back for step 2.
+
 ## What it does
 
 1. Takes a ZIP (or tar.gz, gz, or loose log files) by drag and drop. Nested archives are opened automatically.
@@ -35,11 +43,13 @@ npm run dev                 # http://localhost:3000
 
 Or with Docker: `docker compose up --build`, then open http://localhost:3000.
 
+To host it on Azure instead, see [deploy/azure/README.md](deploy/azure/README.md).
+
 With no API key set the app still works. It runs in "pattern library only" mode, which needs no outside network access at all.
 
 ## Choosing an LLM
 
-Set the keys on the server in `backend/.env`. Keys never reach the browser. The upload screen lets the user pick from whatever is configured.
+Set the keys on the server in `backend/.env`. Keys never reach the browser. The results page lets the user pick from whatever is configured when they ask for the AI analysis. Set `LLM_PROVIDER=none` to switch AI off entirely.
 
 | Provider | Settings |
 |---|---|
@@ -102,7 +112,8 @@ Configured in `backend/.env`: `MAX_UPLOAD_MB` (200), `MAX_EXTRACTED_MB` (600), `
 | Endpoint | Purpose |
 |---|---|
 | `POST /api/analyze` | multipart: `files`, optional `provider`, `context`, `redact`. Streams newline-delimited JSON: `progress` events, then one `result` (or `error`). |
-| `GET /api/config` | Which providers exist and are configured. No secrets. |
+| `POST /api/enhance` | JSON: a result from `/api/analyze`, plus `provider` and optional `redact`. Streams progress, then a new result with an AI-written analysis. Used by the "Add AI analysis" button. |
+| `GET /api/config` | Which providers exist and are configured, and whether AI is available. No secrets. |
 | `GET /api/health` | Liveness. |
 | `GET /api/docs` | OpenAPI docs. |
 
