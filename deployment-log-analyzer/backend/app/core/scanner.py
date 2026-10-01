@@ -51,6 +51,9 @@ class FileScan:
 _DATA_FILE = re.compile(r"\)\s*(?:Command|RegistryKey)\s|windows_defender_support|mpsupportfiles|msinfo32|\.(?:html?|xml|reg|json|csv)$", re.IGNORECASE)
 
 
+_DEFENDER_LOG = re.compile(r"windows_defender_support|mpsupportfiles|[\\/ ](?:mplog|mpcmdrun)[^\\/]*$", re.IGNORECASE)
+
+
 def scan_entries(scan: FileScan, lib: PatternLibrary) -> None:
     data_file = bool(_DATA_FILE.search(scan.path))
     table, residual = lib.prefilter(scan.log_type)
@@ -167,6 +170,9 @@ def build_findings(scan: FileScan, lib: PatternLibrary, settings: Settings) -> l
         role_factor = 1.0 if p.role == Role.cause else 0.6
         # Event logs on a healthy machine are full of errors that mean little on their own, so they never rank as high.
         severity = Severity.medium if (scan.log_type == "windows_event_log" and p.severity == Severity.high) else p.severity
+        # Defender's own logs record thousands of routine scan results and telemetry calls, so they never rank above low.
+        if _DEFENDER_LOG.search(scan.path):
+            severity = Severity.low
         score = round(p.weight * SEVERITY_FACTOR[severity] * recurrence * role_factor, 3)
 
         match_lines: set[int] = set()

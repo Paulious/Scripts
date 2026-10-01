@@ -162,3 +162,13 @@ def test_settings_dumps_do_not_produce_unclassified_error_findings():
     for name in ("x/MDMDiagReport.xml", "x/energy-report.html", "x/dump.reg", "(5) RegistryKey HKLM_x export.reg"):
         assert _DATA_FILE.search(name)
     assert not _DATA_FILE.search("x/healthscripts.log")
+
+
+@pytest.mark.asyncio
+async def test_defender_log_findings_never_rank_above_low(settings):
+    from app.core.pipeline import run_analysis
+    body = ("2026-09-30T07:05:42.635 [EmergencySigManager] ESU telemetry hr=0x800705b4, sendResult.hrCode=0\n" * 3).encode()
+    zipped = make_zip({"x/MPLog-20260925-180722.log": body})
+    events = [e async for e in run_analysis([("Diag.zip", zipped)], settings=settings, provider_id="none")]
+    result = next(e for e in events if e["type"] == "result")["data"]
+    assert result["findings"] and all(f["severity"] == "low" for f in result["findings"])
