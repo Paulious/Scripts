@@ -116,7 +116,14 @@ export function Dashboard({ pattern, ai, view, onView, config, aiStatus, aiMessa
       {rc ? (
         <Card>
           <div className="flex flex-col gap-5 p-5 sm:flex-row sm:p-6">
-            <ConfidenceRing score={rc.confidence.score} label={rc.confidence.label} />
+            {rc.tied_to_failure === false ? (
+              <div className="flex h-24 w-24 shrink-0 flex-col items-center justify-center rounded-full border border-line text-center text-xs leading-4 text-subtle">
+                Not tied to
+                <br />a failure
+              </div>
+            ) : (
+              <ConfidenceRing score={rc.confidence.score} label={rc.confidence.label} />
+            )}
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-xs font-semibold uppercase tracking-wide text-subtle">{rc.tied_to_failure === false ? "Most notable problem" : "Most likely root cause"}</h2>

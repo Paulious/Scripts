@@ -73,7 +73,9 @@ def build_report(r: AnalysisResult) -> str:
 
     rc = a.root_cause
     if rc:
-        md += ["", "## Most likely root cause" if rc.tied_to_failure else "## Most notable problem", "", f"**{rc.title}**  ", f"Confidence: {rc.confidence.score}% ({rc.confidence.label})", "", rc.explanation]
+        md += ["", "## Most likely root cause" if rc.tied_to_failure else "## Most notable problem", "", f"**{rc.title}**  ",
+               (f"Confidence: {rc.confidence.score}% ({rc.confidence.label})" if rc.tied_to_failure
+                else "Not tied to a failed install or exit code in these logs, so no confidence score is given."), "", rc.explanation]
         if rc.reasoning:
             md += ["", "Why we think so:", "", rc.reasoning]
 

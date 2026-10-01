@@ -89,7 +89,7 @@ def build_heuristic(case: Case, *, provider: str = "none", note: str | None = No
         summary = (
             f"{n_files} log file{'s' if n_files != 1 else ''} analysed. Nothing in the logs ties a failed install, failing exit code or "
             f"failed deployment to the most notable problem, so this may be a script or configuration defect rather than a failed "
-            f"deployment. The problem is: {top.title}. {top.explanation}"
+            f"deployment. If the device is working as expected, treat everything here as housekeeping, not a fault. The problem is: {top.title}. {top.explanation}"
         )
 
     verification = list(pattern.verification) if pattern and pattern.verification else [

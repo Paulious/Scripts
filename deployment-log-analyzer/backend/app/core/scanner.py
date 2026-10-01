@@ -165,7 +165,9 @@ def build_findings(scan: FileScan, lib: PatternLibrary, settings: Settings) -> l
         attempts = len(clusters)
         recurrence = 1 + 0.08 * min(attempts - 1, 3)
         role_factor = 1.0 if p.role == Role.cause else 0.6
-        score = round(p.weight * SEVERITY_FACTOR[p.severity] * recurrence * role_factor, 3)
+        # Event logs on a healthy machine are full of errors that mean little on their own, so they never rank as high.
+        severity = Severity.medium if (scan.log_type == "windows_event_log" and p.severity == Severity.high) else p.severity
+        score = round(p.weight * SEVERITY_FACTOR[severity] * recurrence * role_factor, 3)
 
         match_lines: set[int] = set()
         for e in entries:
@@ -176,7 +178,7 @@ def build_findings(scan: FileScan, lib: PatternLibrary, settings: Settings) -> l
             windows.append(build_window(scan, match_lines, cl[0], settings))
 
         findings.append(Finding(
-            id="", pattern_id=p.id, title=p.title, category=p.category, severity=p.severity, role=p.role,
+            id="", pattern_id=p.id, title=p.title, category=p.category, severity=severity, role=p.role,
             file=scan.path, log_type=scan.log_type, match_count=len(matches), attempts=attempts,
             first_line=line_nos[0], last_line=line_nos[-1],
             first_timestamp=_fmt(min(stamps)) if stamps else None,
