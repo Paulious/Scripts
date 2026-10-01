@@ -118,11 +118,12 @@
       "role": "cause",
       "weight": 0.7,
       "regex": [
+        "\\bdisk \\[(?:7|11|15)\\]\\s*(?:param1=)?(?P<detail>\\\\Device\\\\Harddisk\\d+\\\\DR\\d+)",
         "\\bdisk \\[(?:7|11|15)\\]",
-        "\\bNtfs \\[(?:55|98|137)\\]",
+        "\\bNtfs \\[(?:55|137)\\]",
         "volmgr \\[(?:46|161)\\]"
       ],
-      "summary": "Windows logged a disk or file system problem. Failed installs, corrupt downloads and unexplained errors can follow.",
+      "summary": "Windows logged a disk or file system problem ({detail}). A bad block or controller error on the system drive can cause failed installs and corrupt downloads. On an external or card-reader drive it points at that device, not the PC.",
       "applies_to": [
         "windows_event_log"
       ],

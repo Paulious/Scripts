@@ -48,7 +48,7 @@ class FileScan:
 
 
 # Output of a diagnostic command or an exported registry key: words like "error" or "Failed" there are data, not log levels.
-_DATA_FILE = re.compile(r"\)\s*(?:Command|RegistryKey)\s|windows_defender_support|mpsupportfiles|msinfo32", re.IGNORECASE)
+_DATA_FILE = re.compile(r"\)\s*(?:Command|RegistryKey)\s|windows_defender_support|mpsupportfiles|msinfo32|\.(?:html?|xml|reg|json|csv)$", re.IGNORECASE)
 
 
 def scan_entries(scan: FileScan, lib: PatternLibrary) -> None:

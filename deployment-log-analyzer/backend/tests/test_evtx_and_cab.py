@@ -147,3 +147,18 @@ def test_defender_bundle_is_read_last_and_briefly():
     d = classify("(65) FoldersFiles ProgramData_Microsoft_Windows_Defender_Support_MpSupportFiles_cab/mpsupportfiles.cab/C_/x/MPLog.log")
     assert d.tier == "low" and d.max_lines == 15000
     assert classify("(62) Events System Events.evtx").tier == "normal"
+
+
+def test_defender_bundle_keeps_its_logs_and_skips_its_data_files():
+    from app.patterns.triage import classify
+    base = "(65) FoldersFiles ProgramData_Microsoft_Windows_Defender_Support_MpSupportFiles_cab/mpsupportfiles.cab/C_/ProgramData/Microsoft/Windows Defender/Support/"
+    assert classify(base + "MpCmdRun-SystemTemp.log").tier == "low"
+    assert classify(base + "topTraffic").tier == "skip"
+    assert classify(base + "system.evtx").tier == "skip"
+
+
+def test_settings_dumps_do_not_produce_unclassified_error_findings():
+    from app.core.scanner import _DATA_FILE
+    for name in ("x/MDMDiagReport.xml", "x/energy-report.html", "x/dump.reg", "(5) RegistryKey HKLM_x export.reg"):
+        assert _DATA_FILE.search(name)
+    assert not _DATA_FILE.search("x/healthscripts.log")
