@@ -93,6 +93,9 @@ resource api 'Microsoft.App/containerApps@2024-03-01' = {
               type: 'Liveness'
               httpGet: { path: '/api/health', port: 8000 }
               periodSeconds: 30
+              // Scanning a big package keeps the CPU busy for a while; don't restart the app for being slow to answer.
+              timeoutSeconds: 10
+              failureThreshold: 6
             }
           ]
         }

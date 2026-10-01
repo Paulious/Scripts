@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import resource
+import time
 from typing import AsyncIterator
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
@@ -15,6 +18,8 @@ from app.models import AnalysisResult
 from app.patterns import get_library
 
 router = APIRouter(prefix="/api")
+# uvicorn's own logger, so these lines show up in the container log. Sizes and timings only, never file names or contents.
+log = logging.getLogger("uvicorn.error")
 
 CHUNK = 1024 * 1024
 PING_SECONDS = 15
@@ -80,12 +85,16 @@ async def _stream(events: AsyncIterator[dict]) -> AsyncIterator[bytes]:
     """Yield NDJSON, with a ping every few seconds so proxies don't drop a quiet connection
     during a long LLM call."""
     queue: asyncio.Queue = asyncio.Queue()
+    started = time.monotonic()
+    sent = 0
+    outcome = "client went away"
 
     async def pump() -> None:
         try:
             async for ev in events:
                 await queue.put(ev)
         except Exception as exc:  # noqa: BLE001
+            log.exception("analysis crashed")
             await queue.put({"type": "error", "message": f"Analysis failed unexpectedly ({exc.__class__.__name__})"})
         finally:
             await queue.put(None)
@@ -101,9 +110,13 @@ async def _stream(events: AsyncIterator[dict]) -> AsyncIterator[bytes]:
             if ev is None:
                 break
             for chunk in _encode(ev):
+                sent += len(chunk)
                 yield chunk
+        outcome = "finished"
     finally:
         task.cancel()
+        peak_mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024
+        log.info("analysis %s after %.1fs, %d KB sent, peak memory %d MB", outcome, time.monotonic() - started, sent // 1024, peak_mb)
 
 
 @router.post("/analyze")
@@ -123,6 +136,7 @@ async def analyze(
         raise HTTPException(400, "No files uploaded")
 
     uploads = await _read_all(files, limit)
+    log.info("analysis started: %d file(s), %.1f MB", len(uploads), sum(len(d) for _, d in uploads) / 1048576)
     events = run_analysis(
         uploads, settings=s, context=context.strip()[:2000] or None,
         provider_id=provider or None, redact=redact,
