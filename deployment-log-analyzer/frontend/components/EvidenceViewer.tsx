@@ -64,7 +64,7 @@ export function EvidenceViewer({ finding }: { finding: Finding }) {
             {lines.map((l) => (
               <tr
                 key={l.n}
-                data-anchor={l.anchor}
+                data-anchor={!!l.anchor}
                 className={
                   l.anchor
                     ? "bg-dangerSoft shadow-[inset_3px_0_0_var(--danger)]"

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_serializer
 
 
 class Severity(str, Enum):
@@ -45,6 +45,15 @@ class EvidenceLine(BaseModel):
     match: bool = False
     anchor: bool = False
     noise: bool = False
+
+    @model_serializer(mode="wrap")
+    def _compact(self, handler):
+        # Thousands of lines are sent per result, and most flags are false: leave them out.
+        d = handler(self)
+        for key in ("match", "anchor", "noise"):
+            if d.get(key) is False:
+                d.pop(key)
+        return d
 
 
 class EvidenceWindow(BaseModel):

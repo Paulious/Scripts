@@ -241,6 +241,15 @@ def test_provider_selection_rules():
     assert {p.id: p.configured for p in list_providers(both)} == {"anthropic": True, "azure_openai": False, "openai": True, "none": True}
 
 
+def _reassemble(events):
+    """What the browser does with result_begin / result_finding / result_end."""
+    begin = next(e for e in events if e["type"] == "result_begin")
+    data = begin["data"]
+    data["findings"] = [e["data"] for e in events if e["type"] == "result_finding"]
+    assert len(data["findings"]) == begin["count"]
+    return data
+
+
 # ---- HTTP API ----------------------------------------------------------------------
 @pytest.fixture
 def client(monkeypatch, settings):
@@ -268,10 +277,15 @@ def test_analyze_streams_progress_then_result(client):
     assert r.status_code == 200 and r.headers["content-type"].startswith("application/x-ndjson")
     assert r.headers["cache-control"] == "no-store"
     events = [json.loads(line) for line in r.text.splitlines() if line]
-    assert events[0]["type"] == "progress" and events[-1]["type"] == "result"
-    data = events[-1]["data"]
+    assert events[0]["type"] == "progress"
+    data = _reassemble(events)
     assert data["context"] == "Dell Command Update via Patch My PC"
     assert data["findings"][0]["pattern_id"] == "dep-dotnet-missing"
+    # the result is split into small messages instead of one big one
+    kinds = [e["type"] for e in events]
+    assert kinds[-1] == "result_end" and "result_begin" in kinds and kinds.count("result_finding") == len(data["findings"])
+    assert max(len(line) for line in r.text.splitlines()) < len(json.dumps(data)) / 2
+    assert "result" not in kinds
 
 
 def test_upload_limit_returns_413(monkeypatch, settings):
@@ -401,7 +415,7 @@ def test_enhance_endpoint_rejects_missing_provider_and_bad_body(client):
     r = client.post("/api/enhance", json={"result": {"nope": 1}, "provider": "none"})
     assert r.status_code == 422
     base = client.post("/api/analyze", files=[("files", ("a.log", b"2026-01-01 00:00:00 ERROR boom\n", "text/plain"))], data={"provider": "none"})
-    result = json.loads(base.text.splitlines()[-1])["data"]
+    result = _reassemble([json.loads(line) for line in base.text.splitlines() if line])
     r = client.post("/api/enhance", json={"result": result, "provider": "none"})
     assert r.status_code == 400
 
@@ -416,3 +430,12 @@ def test_config_reports_whether_ai_is_available(client, monkeypatch):
     off = Settings(_env_file=None, anthropic_api_key="k", llm_provider="none")
     monkeypatch.setattr(routes, "get_settings", lambda: off)
     assert client.get("/api/config").json()["ai_available"] is False
+
+
+def test_evidence_flags_are_left_out_when_false_and_still_round_trip():
+    from app.models import EvidenceLine
+    plain = EvidenceLine(n=1, text="x").model_dump(mode="json")
+    assert plain == {"n": 1, "text": "x"}
+    hit = EvidenceLine(n=2, text="y", match=True, anchor=True).model_dump(mode="json")
+    assert hit == {"n": 2, "text": "y", "match": True, "anchor": True}
+    assert EvidenceLine.model_validate(plain).noise is False

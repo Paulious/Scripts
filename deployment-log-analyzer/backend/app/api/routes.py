@@ -58,6 +58,24 @@ async def _read_all(files: list[UploadFile], limit_bytes: int) -> list[tuple[str
     return out
 
 
+def _line(ev: dict) -> bytes:
+    return (json.dumps(ev, separators=(",", ":")) + "\n").encode()
+
+
+def _encode(ev: dict) -> list[bytes]:
+    """A finished result can be several hundred KB. Some proxies cope badly with one huge
+    message in a streamed response, so it is sent as a header plus one small message per finding.
+    The browser stitches them back together."""
+    if ev.get("type") != "result":
+        return [_line(ev)]
+    data = ev["data"]
+    findings = data.get("findings", [])
+    out = [_line({"type": "result_begin", "data": {**data, "findings": []}, "count": len(findings)})]
+    out += [_line({"type": "result_finding", "data": f}) for f in findings]
+    out.append(_line({"type": "result_end"}))
+    return out
+
+
 async def _stream(events: AsyncIterator[dict]) -> AsyncIterator[bytes]:
     """Yield NDJSON, with a ping every few seconds so proxies don't drop a quiet connection
     during a long LLM call."""
@@ -82,7 +100,8 @@ async def _stream(events: AsyncIterator[dict]) -> AsyncIterator[bytes]:
                 continue
             if ev is None:
                 break
-            yield (json.dumps(ev, separators=(",", ":")) + "\n").encode()
+            for chunk in _encode(ev):
+                yield chunk
     finally:
         task.cancel()
 

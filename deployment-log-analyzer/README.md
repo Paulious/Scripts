@@ -111,8 +111,8 @@ Configured in `backend/.env`: `MAX_UPLOAD_MB` (200), `MAX_EXTRACTED_MB` (600), `
 
 | Endpoint | Purpose |
 |---|---|
-| `POST /api/analyze` | multipart: `files`, optional `provider`, `context`, `redact`. Streams newline-delimited JSON: `progress` events, then one `result` (or `error`). |
-| `POST /api/enhance` | JSON: a result from `/api/analyze`, plus `provider` and optional `redact`. Streams progress, then a new result with an AI-written analysis. Used by the "Add AI analysis" button. |
+| `POST /api/analyze` | multipart: `files`, optional `provider`, `context`, `redact`. Streams newline-delimited JSON: `progress` events, then the result as `result_begin` (everything except the findings), one `result_finding` per finding and `result_end` (or an `error`). The result is split up because some proxies handle one large streamed message badly. |
+| `POST /api/enhance` | JSON: a result from `/api/analyze`, plus `provider` and optional `redact`. Streams progress, then a new result (same message format) with an AI-written analysis. Used by the "Add AI analysis" button. |
 | `GET /api/config` | Which providers exist and are configured, and whether AI is available. No secrets. |
 | `GET /api/health` | Liveness. |
 | `GET /api/docs` | OpenAPI docs. |

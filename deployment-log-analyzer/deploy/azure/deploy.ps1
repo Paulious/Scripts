@@ -52,7 +52,7 @@ function Fail($text) { Write-Host "ERROR: $text" -ForegroundColor Red; exit 1 }
 function AzCli {
     # Runs az, stops on failure, returns trimmed output.
     $out = & az @args
-    if ($LASTEXITCODE -ne 0) { Fail "az $($args[0..2] -join ' ') failed" }
+    if ($LASTEXITCODE -ne 0) { throw "az $($args[0..2] -join ' ') failed" }
     if ($null -eq $out) { return '' }
     return ($out -join "`n").Trim()
 }
@@ -73,8 +73,16 @@ if ($SkipAuthSetup -and -not $haveAuth -and $AllowedIp.Count -eq 0) {
 if ($haveAuth -and -not $AuthClientSecret) { Fail '-AuthClientId needs -AuthClientSecret as well.' }
 
 if (-not $AnthropicApiKey -and -not $AzureOpenAiEndpoint) {
-    $answer = Read-Host 'Anthropic API key (press Enter to run without AI)'
-    if ($answer) { $AnthropicApiKey = $answer }
+    # Re-running to update the code must not drop a key that is already stored.
+    $existing = $null
+    try { $existing = (& az containerapp secret show --name "$NamePrefix-api" --resource-group $ResourceGroup --secret-name anthropic-api-key --query value --output tsv 2>$null) } catch { $existing = $null }
+    if ($LASTEXITCODE -eq 0 -and $existing) {
+        $AnthropicApiKey = (($existing -join '')).Trim()
+        Write-Host 'Keeping the API key already stored in Azure. Pass -AnthropicApiKey to replace it.'
+    } else {
+        $answer = Read-Host 'Anthropic API key (press Enter to run without AI)'
+        if ($answer) { $AnthropicApiKey = $answer.Trim() }
+    }
 }
 
 # --- 1. Infrastructure --------------------------------------------------------------------
@@ -93,27 +101,44 @@ Write-Host "Site will be at: $url"
 
 # --- 2. Sign-in ---------------------------------------------------------------------------
 if (-not $haveAuth -and -not $SkipAuthSetup) {
-    Step 'Creating the Entra app registration for sign-in'
+    Step 'Setting up the Entra app registration for sign-in'
     try {
-        $AuthClientId = AzCli ad app create --display-name $appName --sign-in-audience AzureADMyOrg `
-            --web-redirect-uris "$url/.auth/login/aad/callback" --enable-id-token-issuance true --query appId --output tsv
-        AzCli ad sp create --id $AuthClientId --output none | Out-Null
+        $redirect = "$url/.auth/login/aad/callback"
+        $found = $null
+        try { $found = (& az ad app list --display-name $appName --query '[0].appId' --output tsv 2>$null) } catch { $found = $null }
+        if ($found) {
+            # Re-running: reuse the registration instead of creating a second one.
+            $AuthClientId = (($found -join '')).Trim()
+            Write-Host "Reusing the existing app registration $AuthClientId"
+            AzCli ad app update --id $AuthClientId --web-redirect-uris $redirect --enable-id-token-issuance true --output none | Out-Null
+        } else {
+            $AuthClientId = AzCli ad app create --display-name $appName --sign-in-audience AzureADMyOrg `
+                --web-redirect-uris $redirect --enable-id-token-issuance true --query appId --output tsv
+            AzCli ad sp create --id $AuthClientId --output none | Out-Null
+            Write-Host "Created app registration $AuthClientId"
+        }
+        # A fresh secret on every run. It goes straight into Azure and is never shown.
         $AuthClientSecret = AzCli ad app credential reset --id $AuthClientId --display-name 'container-apps' --years 1 --query password --output tsv
         $haveAuth = $true
 
-        # Only people you assign can sign in. Start with yourself so you are not locked out.
+        # Only people you assign can sign in.
         $spId = AzCli ad sp show --id $AuthClientId --query id --output tsv
         AzCli ad sp update --id $AuthClientId --set appRoleAssignmentRequired=true | Out-Null
-        $me = AzCli ad signed-in-user show --query id --output tsv
-        $body = @{ principalId = $me; resourceId = $spId; appRoleId = '00000000-0000-0000-0000-000000000000' } | ConvertTo-Json -Compress
-        $tmp = New-TemporaryFile
-        Set-Content -Path $tmp -Value $body
-        AzCli rest --method POST --uri "https://graph.microsoft.com/v1.0/servicePrincipals/$spId/appRoleAssignedTo" `
-            --headers 'Content-Type=application/json' --body "@$tmp" --output none | Out-Null
-        Remove-Item $tmp -Force
-        Write-Host "App registration $AuthClientId created. You have been assigned access."
+        try {
+            # Assign yourself so you are not locked out. Harmless if it already exists.
+            $me = AzCli ad signed-in-user show --query id --output tsv
+            $body = @{ principalId = $me; resourceId = $spId; appRoleId = '00000000-0000-0000-0000-000000000000' } | ConvertTo-Json -Compress
+            $tmp = New-TemporaryFile
+            Set-Content -Path $tmp -Value $body
+            AzCli rest --method POST --uri "https://graph.microsoft.com/v1.0/servicePrincipals/$spId/appRoleAssignedTo" `
+                --headers 'Content-Type=application/json' --body "@$tmp" --output none | Out-Null
+            Remove-Item $tmp -Force
+            Write-Host 'You have been assigned access.'
+        } catch {
+            Write-Host 'Could not assign you automatically (you may already be assigned). Check Enterprise applications > Users and groups.' -ForegroundColor Yellow
+        }
     } catch {
-        Write-Host "Could not create the app registration automatically: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "Could not set up the app registration automatically: $($_.Exception.Message)" -ForegroundColor Yellow
         if ($AllowedIp.Count -eq 0) {
             Fail "Ask an admin to create the app registration (see README), then re-run with -AuthClientId and -AuthClientSecret. Or re-run with -SkipAuthSetup -AllowedIp <your address>."
         }

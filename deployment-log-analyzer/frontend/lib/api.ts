@@ -9,6 +9,11 @@ export async function fetchConfig(signal?: AbortSignal): Promise<AppConfig> {
   return res.json();
 }
 
+type PartEvent =
+  | { type: "result_begin"; data: AnalysisResult; count: number }
+  | { type: "result_finding"; data: AnalysisResult["findings"][number] }
+  | { type: "result_end" };
+
 interface StreamOptions {
   path: string;
   body: FormData | string;
@@ -31,6 +36,8 @@ function postStream(opts: StreamOptions): Promise<void> {
     let consumed = 0;
     let buffer = "";
     let finished = false;
+    // A result arrives as result_begin, one result_finding per finding, then result_end.
+    let assembling: AnalysisResult | null = null;
 
     const drain = () => {
       buffer += xhr.responseText.slice(consumed);
@@ -41,9 +48,21 @@ function postStream(opts: StreamOptions): Promise<void> {
         buffer = buffer.slice(nl + 1);
         if (!line) continue;
         try {
-          const ev = JSON.parse(line) as StreamEvent;
-          if (ev.type === "result" || ev.type === "error") finished = true;
-          opts.onEvent(ev);
+          const ev = JSON.parse(line) as StreamEvent | PartEvent;
+          if (ev.type === "result_begin") {
+            assembling = ev.data;
+          } else if (ev.type === "result_finding") {
+            assembling?.findings.push(ev.data);
+          } else if (ev.type === "result_end") {
+            if (assembling) {
+              finished = true;
+              opts.onEvent({ type: "result", data: assembling });
+              assembling = null;
+            }
+          } else {
+            if (ev.type === "result" || ev.type === "error") finished = true;
+            opts.onEvent(ev);
+          }
         } catch {
           /* ignore a malformed line rather than lose the whole run */
         }

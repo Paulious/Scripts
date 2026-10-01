@@ -98,7 +98,7 @@ Because the model runs in your own tenant, this is the better choice if log data
 
 ## Day to day
 
-- **Update the code:** pull the latest, run `deploy.ps1` again with the same options. Existing resources are reused.
+- **Update the code:** pull the latest, run `deploy.ps1` again with the same options. Existing resources and the sign-in app registration are reused, and the API key already stored in Azure is kept unless you pass a new one. It rebuilds the images each time, so allow a few minutes.
 - **Logs:** `az containerapp logs show --name dla-api --resource-group rg-log-analyzer --follow`. The service never writes file names or contents to its logs.
 - **First request after a quiet spell is slower** because the API and website can scale to zero. Set `minReplicas` to 1 in `apps.bicep` if that bothers you.
 - **Remove everything:** `az group delete --name rg-log-analyzer`.

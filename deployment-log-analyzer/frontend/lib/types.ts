@@ -26,9 +26,10 @@ export interface SkippedFile {
 export interface EvidenceLine {
   n: number;
   text: string;
-  match: boolean;
-  anchor: boolean;
-  noise: boolean;
+  // The server leaves out flags that are false.
+  match?: boolean;
+  anchor?: boolean;
+  noise?: boolean;
 }
 
 export interface EvidenceWindow {
