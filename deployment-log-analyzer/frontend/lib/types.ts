@@ -152,6 +152,8 @@ export interface StageInfo {
 export interface AppConfig {
   providers: ProviderInfo[];
   default_provider: string;
+  ai_available: boolean;
+  ai_default_provider: string | null;
   stages: StageInfo[];
   limits: { max_upload_mb: number; evidence_context_lines: number };
   redact_default: boolean;

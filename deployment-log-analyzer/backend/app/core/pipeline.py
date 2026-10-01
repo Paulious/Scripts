@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections import defaultdict
 from datetime import datetime, timezone
 from typing import AsyncIterator
 
@@ -259,3 +260,63 @@ async def run_analysis(
     result.report_markdown = build_report(result)
     yield _progress("report", "done", "Done", 100)
     yield {"type": "result", "data": result.model_dump(mode="json")}
+
+
+# ---------------------------------------------------------------------------
+# Second step: add an LLM analysis to a result the pattern pass already produced.
+# The browser sends the pattern result back, so the server still keeps nothing.
+# ---------------------------------------------------------------------------
+def case_from_result(result: AnalysisResult) -> Case:
+    links: dict[str, set[str]] = defaultdict(set)
+    for f in result.findings:
+        for other in f.related_files:
+            links[f.file].add(other)
+            links[other].add(f.file)
+    return Case(
+        context=result.context, files=result.files, skipped=result.skipped, findings=result.findings,
+        suppressed=result.suppressed, links=dict(links), library=get_library(),
+        top=result.findings[0] if result.findings else None,
+    )
+
+
+async def run_enhance(
+    result: AnalysisResult,
+    *,
+    settings: Settings,
+    provider_id: str,
+    redact: bool | None = None,
+    http_client: Any | None = None,
+) -> AsyncIterator[dict]:
+    redact = settings.redact_for_llm if redact is None else redact
+    pid = resolve_provider_id(provider_id, settings)
+    if pid == "none":
+        yield {"type": "error", "message": "No AI provider is selected or configured on the server."}
+        return
+    try:
+        provider = build_provider(pid, settings, http_client)
+    except ValueError as exc:
+        yield {"type": "error", "message": str(exc)}
+        return
+
+    case = case_from_result(result)
+    if case.top is None:
+        yield {"type": "error", "message": "The pattern pass found nothing to analyse, so there is nothing to send to the AI."}
+        return
+
+    yield _progress("analyze", "running", f"{provider.name} / {provider.model}")
+    try:
+        out = await _ask_llm(provider, case, settings, redact)
+        analysis = _to_analysis(out, case, provider)
+    except (LLMError, asyncio.TimeoutError) as exc:
+        yield {"type": "error", "message": f"The {provider.name} analysis failed: {str(exc) or 'the request timed out'}"}
+        return
+    except Exception as exc:  # noqa: BLE001
+        yield {"type": "error", "message": f"The {provider.name} analysis failed unexpectedly ({exc.__class__.__name__})"}
+        return
+    yield _progress("analyze", "done", "Analysis complete", 100)
+
+    yield _progress("report", "running", "Writing Markdown report")
+    enhanced = result.model_copy(update={"analysis": analysis})
+    enhanced.report_markdown = build_report(enhanced)
+    yield _progress("report", "done", "Done", 100)
+    yield {"type": "result", "data": enhanced.model_dump(mode="json")}

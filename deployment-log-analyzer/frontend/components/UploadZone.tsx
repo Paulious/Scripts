@@ -6,9 +6,7 @@ import { bytes } from "@/lib/format";
 import { Button, Card, Icon } from "./ui";
 
 export interface UploadOptions {
-  provider: string;
   context: string;
-  redact: boolean;
 }
 
 interface Props {
@@ -21,14 +19,9 @@ export function UploadZone({ config, onAnalyze, disabled }: Props) {
   const [files, setFiles] = useState<File[]>([]);
   const [over, setOver] = useState(false);
   const [context, setContext] = useState("");
-  const [provider, setProvider] = useState<string>("");
-  const [redact, setRedact] = useState(true);
   const input = useRef<HTMLInputElement>(null);
-  const ids = { ctx: useId(), prov: useId(), red: useId() };
+  const ids = { ctx: useId() };
 
-  const chosen = provider || config?.default_provider || "none";
-  const providerInfo = config?.providers.find((p) => p.id === chosen);
-  const usesLlm = chosen !== "none";
   const maxMb = config?.limits.max_upload_mb ?? 200;
   const total = files.reduce((n, f) => n + f.size, 0);
   const tooBig = total > maxMb * 1024 * 1024;
@@ -117,8 +110,8 @@ export function UploadZone({ config, onAnalyze, disabled }: Props) {
           </p>
         )}
 
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
-          <div className="md:col-span-2">
+        <div className="mt-5">
+          <div>
             <label htmlFor={ids.ctx} className="mb-1 block text-sm font-semibold">
               What were you deploying? <span className="font-normal text-faint">(optional)</span>
             </label>
@@ -132,46 +125,21 @@ export function UploadZone({ config, onAnalyze, disabled }: Props) {
               className="w-full resize-y rounded-md border border-lineStrong bg-surface px-3 py-2 text-sm placeholder:text-faint"
             />
           </div>
-          <div>
-            <label htmlFor={ids.prov} className="mb-1 block text-sm font-semibold">
-              Analysis engine
-            </label>
-            <select
-              id={ids.prov}
-              value={chosen}
-              onChange={(e) => setProvider(e.target.value)}
-              className="h-9 w-full rounded-md border border-lineStrong bg-surface px-2 text-sm"
-            >
-              {(config?.providers ?? [{ id: "none", label: "Pattern library only (no LLM)", model: null, configured: true }]).map((p) => (
-                <option key={p.id} value={p.id} disabled={!p.configured}>
-                  {p.label}
-                  {p.model && p.configured ? ` (${p.model})` : ""}
-                  {!p.configured ? " - not configured on the server" : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-end">
-            <label htmlFor={ids.red} className={`flex items-center gap-2 text-sm ${usesLlm ? "" : "opacity-50"}`}>
-              <input id={ids.red} type="checkbox" checked={redact} disabled={!usesLlm} onChange={(e) => setRedact(e.target.checked)} className="h-4 w-4 accent-[var(--brand)]" />
-              Remove passwords, tokens, emails and user names before sending
-            </label>
-          </div>
         </div>
 
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
           <p className="flex max-w-xl items-start gap-2 text-xs text-subtle">
             <Icon.Info className="mt-0.5" />
             <span>
-              Files are processed in memory and discarded when the analysis ends. Nothing is stored.
-              {usesLlm && providerInfo ? ` Relevant log excerpts are sent to ${providerInfo.label} to write the analysis.` : " No data leaves the server in this mode."}
+              The first pass uses the built-in pattern library only, so no log data goes to any AI service. Files are processed in memory and discarded when
+              the analysis ends.{config?.ai_available ? " Once you have the results you can choose to add an AI-written analysis." : ""}
             </span>
           </p>
           <Button
             variant="primary"
             className="h-9 px-5"
             disabled={disabled || files.length === 0 || tooBig}
-            onClick={() => onAnalyze(files, { provider: chosen, context, redact })}
+            onClick={() => onAnalyze(files, { context })}
           >
             Analyse logs
           </Button>

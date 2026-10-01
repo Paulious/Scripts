@@ -1,5 +1,6 @@
-import type { AppConfig, StreamEvent } from "./types";
+import type { AnalysisResult, AppConfig, StreamEvent } from "./types";
 
+// Empty string means "same origin" (used when a proxy serves the site and /api together).
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
 
 export async function fetchConfig(signal?: AbortSignal): Promise<AppConfig> {
@@ -8,25 +9,25 @@ export async function fetchConfig(signal?: AbortSignal): Promise<AppConfig> {
   return res.json();
 }
 
-export interface AnalyzeOptions {
-  files: File[];
-  provider: string;
-  context: string;
-  redact: boolean;
-  onUpload: (percent: number) => void;
+interface StreamOptions {
+  path: string;
+  body: FormData | string;
+  json?: boolean;
+  onUpload?: (percent: number) => void;
   onEvent: (event: StreamEvent) => void;
   signal: AbortSignal;
 }
 
 /**
- * Upload the files and read the NDJSON progress stream.
+ * POST and read a newline-delimited JSON progress stream.
  * XMLHttpRequest is used on purpose: unlike fetch it reports upload progress,
  * and it exposes the response text as it arrives.
  */
-export function analyze(opts: AnalyzeOptions): Promise<void> {
+function postStream(opts: StreamOptions): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open("POST", `${API_URL}/api/analyze`);
+    xhr.open("POST", `${API_URL}${opts.path}`);
+    if (opts.json) xhr.setRequestHeader("Content-Type", "application/json");
     let consumed = 0;
     let buffer = "";
     let finished = false;
@@ -44,15 +45,16 @@ export function analyze(opts: AnalyzeOptions): Promise<void> {
           if (ev.type === "result" || ev.type === "error") finished = true;
           opts.onEvent(ev);
         } catch {
-          /* a partial line can't happen here because we split on newlines */
+          /* ignore a malformed line rather than lose the whole run */
         }
       }
     };
 
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) opts.onUpload(Math.round((100 * e.loaded) / e.total));
-    };
-    xhr.upload.onload = () => opts.onUpload(100);
+    if (opts.onUpload) {
+      const up = opts.onUpload;
+      xhr.upload.onprogress = (e) => e.lengthComputable && up(Math.round((100 * e.loaded) / e.total));
+      xhr.upload.onload = () => up(100);
+    }
     xhr.onprogress = drain;
     xhr.onload = () => {
       if (xhr.status >= 400) {
@@ -73,12 +75,42 @@ export function analyze(opts: AnalyzeOptions): Promise<void> {
     xhr.onerror = () => reject(new Error("Could not reach the analysis service. Check that the backend is running."));
     xhr.onabort = () => reject(new DOMException("Cancelled", "AbortError"));
     opts.signal.addEventListener("abort", () => xhr.abort());
+    xhr.send(opts.body);
+  });
+}
 
-    const form = new FormData();
-    for (const f of opts.files) form.append("files", f, f.name);
-    form.append("provider", opts.provider);
-    form.append("context", opts.context);
-    form.append("redact", String(opts.redact));
-    xhr.send(form);
+export interface AnalyzeOptions {
+  files: File[];
+  context: string;
+  onUpload: (percent: number) => void;
+  onEvent: (event: StreamEvent) => void;
+  signal: AbortSignal;
+}
+
+/** Step 1: upload and run the pattern pass. No AI provider is involved. */
+export function analyze(opts: AnalyzeOptions): Promise<void> {
+  const form = new FormData();
+  for (const f of opts.files) form.append("files", f, f.name);
+  form.append("provider", "none");
+  form.append("context", opts.context);
+  return postStream({ path: "/api/analyze", body: form, onUpload: opts.onUpload, onEvent: opts.onEvent, signal: opts.signal });
+}
+
+export interface EnhanceOptions {
+  result: AnalysisResult;
+  provider: string;
+  redact: boolean;
+  onEvent: (event: StreamEvent) => void;
+  signal: AbortSignal;
+}
+
+/** Step 2 (optional): send the pattern result back and get an AI-written analysis. */
+export function enhance(opts: EnhanceOptions): Promise<void> {
+  return postStream({
+    path: "/api/enhance",
+    json: true,
+    body: JSON.stringify({ result: opts.result, provider: opts.provider, redact: opts.redact }),
+    onEvent: opts.onEvent,
+    signal: opts.signal,
   });
 }

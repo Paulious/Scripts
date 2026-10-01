@@ -349,3 +349,70 @@ async def test_multiline_commands_stay_inside_their_code_block(settings):
 def test_prompt_tells_the_model_to_compare_attempts():
     from app.llm.prompts import SYSTEM_PROMPT
     assert "compare them" in SYSTEM_PROMPT and "wrong version" in SYSTEM_PROMPT
+
+
+# ---- two-step flow: pattern first, then AI on demand -----------------------------------
+async def _pattern_result(settings):
+    events = [e async for e in run_analysis(_uploads(), settings=settings, provider_id="none")]
+    return events[-1]["data"]
+
+
+async def _enhance(settings, result_json, provider, **kw):
+    import app.core.pipeline as pl
+    from app.models import AnalysisResult
+    orig = pl.build_provider
+    pl.build_provider = lambda *_a, **_k: provider
+    try:
+        return [e async for e in pl.run_enhance(AnalysisResult.model_validate(result_json), settings=settings, provider_id="fake", **kw)]
+    finally:
+        pl.build_provider = orig
+
+
+@pytest.mark.asyncio
+async def test_enhance_adds_ai_analysis_to_the_pattern_result(settings):
+    base = await _pattern_result(settings)
+    assert base["analysis"]["provider"] == "none"
+    provider = FakeProvider([LLM_REPLY])
+    events = await _enhance(settings, base, provider)
+    out = events[-1]["data"]
+    assert out["analysis"]["provider"] == "fake" and out["analysis"]["root_cause"]["title"].startswith(".NET Desktop Runtime 10")
+    assert out["findings"] == base["findings"] and out["files"] == base["files"]  # same evidence, new write-up
+    assert "Analysis by: fake" in out["report_markdown"]
+    assert "Desktop Runtime" in provider.calls[0][1]
+
+
+@pytest.mark.asyncio
+async def test_enhance_failure_is_an_error_not_a_silent_fallback(settings):
+    base = await _pattern_result(settings)
+    events = await _enhance(settings, base, FakeProvider([LLMError("API returned 401: API key is invalid.")]))
+    assert events[-1]["type"] == "error" and "401" in events[-1]["message"]
+
+
+@pytest.mark.asyncio
+async def test_enhance_with_no_findings_does_not_call_the_model(settings):
+    from app.core.pipeline import run_analysis as ra
+    ok = [e async for e in ra([("ok.msi.log", __import__("tests.fixtures", fromlist=["x"]).healthy_msi_log())], settings=settings, provider_id="none")][-1]["data"]
+    provider = FakeProvider([])
+    events = await _enhance(settings, ok, provider)
+    assert events[-1]["type"] == "error" and provider.calls == []
+
+
+def test_enhance_endpoint_rejects_missing_provider_and_bad_body(client):
+    r = client.post("/api/enhance", json={"result": {"nope": 1}, "provider": "none"})
+    assert r.status_code == 422
+    base = client.post("/api/analyze", files=[("files", ("a.log", b"2026-01-01 00:00:00 ERROR boom\n", "text/plain"))], data={"provider": "none"})
+    result = json.loads(base.text.splitlines()[-1])["data"]
+    r = client.post("/api/enhance", json={"result": result, "provider": "none"})
+    assert r.status_code == 400
+
+
+def test_config_reports_whether_ai_is_available(client, monkeypatch):
+    import app.api.routes as routes
+    assert client.get("/api/config").json()["ai_available"] is False
+    keyed = Settings(_env_file=None, anthropic_api_key="k")
+    monkeypatch.setattr(routes, "get_settings", lambda: keyed)
+    cfg = client.get("/api/config").json()
+    assert cfg["ai_available"] is True and cfg["ai_default_provider"] == "anthropic"
+    off = Settings(_env_file=None, anthropic_api_key="k", llm_provider="none")
+    monkeypatch.setattr(routes, "get_settings", lambda: off)
+    assert client.get("/api/config").json()["ai_available"] is False

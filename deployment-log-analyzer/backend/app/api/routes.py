@@ -6,10 +6,12 @@ from typing import AsyncIterator
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from app.config import get_settings
-from app.core.pipeline import STAGES, run_analysis
+from app.core.pipeline import STAGES, run_analysis, run_enhance
 from app.llm import list_providers, resolve_provider_id
+from app.models import AnalysisResult
 from app.patterns import get_library
 
 router = APIRouter(prefix="/api")
@@ -28,9 +30,13 @@ async def health() -> dict:
 async def config() -> dict:
     """Everything the UI needs to know. No secrets, only which providers exist."""
     s = get_settings()
+    default = resolve_provider_id(None, s)
     return {
         "providers": [p.model_dump() for p in list_providers(s)],
-        "default_provider": resolve_provider_id(None, s),
+        "default_provider": default,
+        # The website runs the pattern pass first and offers AI as an optional second step.
+        "ai_available": default != "none",
+        "ai_default_provider": default if default != "none" else None,
         "stages": [{"id": i, "label": label} for i, label in STAGES],
         "limits": {"max_upload_mb": s.max_upload_mb, "evidence_context_lines": s.evidence_context_lines},
         "redact_default": s.redact_for_llm,
@@ -102,6 +108,36 @@ async def analyze(
         uploads, settings=s, context=context.strip()[:2000] or None,
         provider_id=provider or None, redact=redact,
     )
+    return StreamingResponse(
+        _stream(events),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+    )
+
+
+class EnhanceRequest(BaseModel):
+    result: AnalysisResult
+    provider: str = ""
+    redact: bool | None = None
+
+
+MAX_ENHANCE_BYTES = 25 * 1024 * 1024
+
+
+@router.post("/enhance")
+async def enhance(request: Request, body: EnhanceRequest):
+    """Add an AI-written analysis to a pattern result the client already holds.
+
+    The server keeps nothing between the two calls: the browser sends its own result back.
+    The result is treated as untrusted input, like the log text it came from.
+    """
+    declared = request.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > MAX_ENHANCE_BYTES:
+        raise HTTPException(413, "Result is too large to send for AI analysis")
+    s = get_settings()
+    if resolve_provider_id(body.provider or None, s) == "none":
+        raise HTTPException(400, "No AI provider is selected or configured on the server")
+    events = run_enhance(body.result, settings=s, provider_id=body.provider, redact=body.redact)
     return StreamingResponse(
         _stream(events),
         media_type="application/x-ndjson",

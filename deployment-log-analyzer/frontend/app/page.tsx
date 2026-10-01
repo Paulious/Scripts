@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Dashboard } from "@/components/Dashboard";
+import { type AiStatus } from "@/components/AiPanel";
+import { Dashboard, type View } from "@/components/Dashboard";
 import { Header } from "@/components/Header";
 import { ProgressTracker, type TrackerStage } from "@/components/ProgressTracker";
 import { UploadZone, type UploadOptions } from "@/components/UploadZone";
 import { Card, Button, Icon } from "@/components/ui";
-import { analyze, fetchConfig } from "@/lib/api";
+import { analyze, enhance, fetchConfig } from "@/lib/api";
 import type { AnalysisResult, AppConfig, StreamEvent } from "@/lib/types";
 
 type Phase = "idle" | "running" | "done" | "error";
@@ -37,6 +38,12 @@ export default function Home() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abort = useRef<AbortController | null>(null);
+  const aiAbort = useRef<AbortController | null>(null);
+  const [ai, setAi] = useState<AnalysisResult | null>(null);
+  const [aiStatus, setAiStatus] = useState<AiStatus>("idle");
+  const [aiMessage, setAiMessage] = useState<string>("");
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [view, setView] = useState<View>("pattern");
 
   useEffect(() => {
     const ctl = new AbortController();
@@ -50,6 +57,11 @@ export default function Home() {
 
   const reset = useCallback(() => {
     abort.current?.abort();
+    aiAbort.current?.abort();
+    setAi(null);
+    setAiStatus("idle");
+    setAiError(null);
+    setView("pattern");
     setPhase("idle");
     setResult(null);
     setError(null);
@@ -82,7 +94,7 @@ export default function Home() {
       try {
         await analyze({
           files,
-          ...opts,
+          context: opts.context,
           signal: ctl.signal,
           onUpload: (p) => patch("upload", { status: p >= 100 ? "done" : "running", percent: p, message: `${p}%` }),
           onEvent,
@@ -95,6 +107,41 @@ export default function Home() {
       }
     },
     [config, patch],
+  );
+
+  const runAi = useCallback(
+    async (provider: string, redact: boolean) => {
+      if (!result) return;
+      const ctl = new AbortController();
+      aiAbort.current = ctl;
+      setAiStatus("running");
+      setAiError(null);
+      setAiMessage("Sending the evidence");
+      try {
+        await enhance({
+          result,
+          provider,
+          redact,
+          signal: ctl.signal,
+          onEvent: (ev: StreamEvent) => {
+            if (ev.type === "progress") setAiMessage(ev.message || ev.stage);
+            else if (ev.type === "result") {
+              setAi(ev.data);
+              setView("ai");
+              setAiStatus("idle");
+            } else if (ev.type === "error") {
+              setAiError(ev.message);
+              setAiStatus("error");
+            }
+          },
+        });
+      } catch (e) {
+        if ((e as Error).name === "AbortError") return;
+        setAiError((e as Error).message);
+        setAiStatus("error");
+      }
+    },
+    [result],
   );
 
   return (
@@ -130,7 +177,20 @@ export default function Home() {
           </div>
         )}
 
-        {phase === "done" && result && <Dashboard result={result} onReset={reset} />}
+        {phase === "done" && result && (
+          <Dashboard
+            pattern={result}
+            ai={ai}
+            view={view}
+            onView={setView}
+            config={config}
+            aiStatus={aiStatus}
+            aiMessage={aiMessage}
+            aiError={aiError}
+            onRunAi={runAi}
+            onReset={reset}
+          />
+        )}
       </main>
       <footer className="mx-auto max-w-6xl px-4 pb-8 text-xs text-faint sm:px-6">
         Nothing you upload is stored. Analysis runs in memory and is discarded when it finishes.

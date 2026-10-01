@@ -1,7 +1,8 @@
 "use client";
 
-import type { AnalysisResult } from "@/lib/types";
+import type { AnalysisResult, AppConfig } from "@/lib/types";
 import { download, seconds } from "@/lib/format";
+import { AiPanel, type AiStatus } from "./AiPanel";
 import { ConfidenceRing, tone } from "./ConfidenceRing";
 import { FilesTable } from "./FilesTable";
 import { FindingsTable } from "./FindingsTable";
@@ -28,7 +29,24 @@ function List({ title, items, empty }: { title: string; items: string[]; empty?:
   );
 }
 
-export function Dashboard({ result, onReset }: { result: AnalysisResult; onReset: () => void }) {
+export type View = "pattern" | "ai";
+
+interface DashboardProps {
+  pattern: AnalysisResult;
+  ai: AnalysisResult | null;
+  view: View;
+  onView: (v: View) => void;
+  config: AppConfig | null;
+  aiStatus: AiStatus;
+  aiMessage?: string;
+  aiError?: string | null;
+  onRunAi: (provider: string, redact: boolean) => void;
+  onReset: () => void;
+}
+
+export function Dashboard({ pattern, ai, view, onView, config, aiStatus, aiMessage, aiError, onRunAi, onReset }: DashboardProps) {
+  // Findings, evidence and files are identical in both views; only the written analysis differs.
+  const result = view === "ai" && ai ? ai : pattern;
   const { analysis: a, stats } = result;
   const rc = a.root_cause;
   const causeCount = result.findings.filter((f) => f.role === "cause").length;
@@ -44,6 +62,21 @@ export function Dashboard({ result, onReset }: { result: AnalysisResult; onReset
             {result.context ? ` · ${result.context}` : ""}
           </p>
         </div>
+        {ai && (
+          <div role="group" aria-label="Which analysis to show" className="inline-flex rounded-md border border-line bg-surface p-0.5">
+            {(["pattern", "ai"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                aria-pressed={view === v}
+                onClick={() => onView(v)}
+                className={`rounded px-3 py-1 text-sm font-semibold ${view === v ? "bg-brandSoft text-brand" : "text-subtle hover:bg-surface2"}`}
+              >
+                {v === "pattern" ? "Pattern analysis" : "AI analysis"}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <CopyButton text={result.report_markdown} label="Copy Markdown" className="h-8 px-3 text-sm font-semibold" />
           <Button variant="primary" onClick={() => download(`deployment-analysis-${stamp}.md`, result.report_markdown)}>
@@ -52,6 +85,8 @@ export function Dashboard({ result, onReset }: { result: AnalysisResult; onReset
           <Button onClick={onReset}>New analysis</Button>
         </div>
       </div>
+
+      {!ai && <AiPanel config={config} status={aiStatus} message={aiMessage} error={aiError} onRun={onRunAi} />}
 
       {(a.degraded || a.notes.length > 0) && (
         <div role="status" className="flex gap-2.5 rounded-lg border border-transparent bg-warnSoft px-4 py-3 text-warn">
