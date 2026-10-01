@@ -100,7 +100,7 @@ def build_heuristic(case: Case, *, provider: str = "none", note: str | None = No
         summary=summary,
         root_cause=RootCause(
             title=top.title, category=top.category, explanation=top.explanation,
-            reasoning=" ".join(reasoning), finding_ids=[top.id], confidence=base,
+            reasoning=" ".join(reasoning), finding_ids=[top.id], confidence=base, tied_to_failure=bool(outcomes),
         ),
         contributing_factors=contributing,
         ruled_out=_ruled_out(case),

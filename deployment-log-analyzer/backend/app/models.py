@@ -130,6 +130,8 @@ class RootCause(BaseModel):
     reasoning: str = ""
     finding_ids: list[str] = Field(default_factory=list)
     confidence: Confidence
+    # False when no failed install or failing exit code in the same log goes with it: a problem to fix, not a proven cause.
+    tied_to_failure: bool = True
 
 
 class Analysis(BaseModel):

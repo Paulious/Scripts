@@ -198,6 +198,7 @@ def _to_analysis(out: LLMOutput, case: Case, provider: LLMProvider) -> Analysis:
                     title=out.root_cause.title, category=out.root_cause.category or chosen.category,
                     explanation=out.root_cause.explanation or chosen.explanation, reasoning=out.root_cause.reasoning,
                     finding_ids=ids or [chosen.id], confidence=conf,
+                    tied_to_failure=heur.root_cause.tied_to_failure if heur.root_cause else True,
                 )
             else:
                 root = heur.root_cause

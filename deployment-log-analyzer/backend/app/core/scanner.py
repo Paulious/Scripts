@@ -47,7 +47,12 @@ class FileScan:
     offset: int = 0  # lines dropped from the top; displayed line numbers stay those of the original file
 
 
+# Output of a diagnostic command or an exported registry key: words like "error" or "Failed" there are data, not log levels.
+_DATA_FILE = re.compile(r"\)\s*(?:Command|RegistryKey)\s", re.IGNORECASE)
+
+
 def scan_entries(scan: FileScan, lib: PatternLibrary) -> None:
+    data_file = bool(_DATA_FILE.search(scan.path))
     table, residual = lib.prefilter(scan.log_type)
     order = {p.id: i for i, p in enumerate(lib.for_log_type(scan.log_type))}
     any_noise = lib.suppress_any.search
@@ -87,7 +92,7 @@ def scan_entries(scan: FileScan, lib: PatternLibrary) -> None:
                 claimed.add(key)
                 scan.matches.setdefault(p.id, []).append(Match(idx, detail))
                 hit_any = True
-        if not hit_any and entry.level == ERROR:
+        if not hit_any and entry.level == ERROR and not data_file:
             scan.unclassified.append(idx)
 
 

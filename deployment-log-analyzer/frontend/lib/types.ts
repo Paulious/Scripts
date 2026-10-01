@@ -100,6 +100,7 @@ export interface RemediationStep {
 }
 
 export interface RootCause {
+  tied_to_failure?: boolean;
   title: string;
   category: string;
   explanation: string;

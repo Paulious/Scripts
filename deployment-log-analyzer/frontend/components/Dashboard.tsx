@@ -119,7 +119,7 @@ export function Dashboard({ pattern, ai, view, onView, config, aiStatus, aiMessa
             <ConfidenceRing score={rc.confidence.score} label={rc.confidence.label} />
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-xs font-semibold uppercase tracking-wide text-subtle">Most likely root cause</h2>
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-subtle">{rc.tied_to_failure === false ? "Most notable problem" : "Most likely root cause"}</h2>
                 <Badge tone="brand">{rc.category}</Badge>
                 {rc.finding_ids.map((id) => (
                   <Badge key={id}>{id}</Badge>

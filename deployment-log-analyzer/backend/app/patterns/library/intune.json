@@ -107,7 +107,7 @@
       "role": "cause",
       "weight": 0.75,
       "regex": [
-        "(?:install\\w*|script|process|operation|download)[^\\r\\n]{0,40}\\b(?:timed out|time ?out (?:was )?(?:reached|exceeded|expired))",
+        "\\A(?![\\s\\S]*Win[Hh]ttp)[\\s\\S]*?(?:install\\w*|script|process|operation|download)[^\\r\\n]{0,40}\\b(?:timed out|time ?out (?:was )?(?:reached|exceeded|expired))",
         "\\bhas timed out\\b",
         "exceeded (?:the )?max(?:imum)?(?: allowed)? (?:run ?time|execution time|time|duration)",
         "0x800705B4",
