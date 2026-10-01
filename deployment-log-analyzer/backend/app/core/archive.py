@@ -76,6 +76,8 @@ def sniff_archive(data: bytes) -> str | None:
         return "bz2"
     if head.startswith(XZ_MAGIC):
         return "xz"
+    if head.startswith(b"MSCF"):
+        return "cab"
     if len(data) > 262 and data[257:262] == b"ustar":
         return "tar"
     for magic in UNSUPPORTED:

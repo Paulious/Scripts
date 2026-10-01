@@ -81,7 +81,7 @@ An Intune "Collect diagnostics" package can be several hundred MB of mostly nois
 - Every file is limited to the last `MAX_LINES_PER_FILE` lines, and the whole run stops reading after `MAX_TOTAL_LINES` lines or `TIME_BUDGET_SECONDS` seconds, always high priority first. Line numbers in the evidence are those of the original file.
 - Scanning uses a plain-text pre-check so that most lines never reach a regex (about 25,000 lines per second in testing on a 490 MB package, with the peak memory about 30 MB above the size of the upload).
 
-Not read yet: Windows event logs (`.evtx`), `.cab` archives (the MDM diagnostics report is inside one) and `.etl` traces. The results page lists everything that was skipped and why.
+Windows event logs (`.evtx`) are turned into one text line per event and checked like any other log; errors and warnings are always kept, information events only when the log is small. `.cab` files (the MDM diagnostics bundle is one) are opened and their contents read. Cabinets compressed with LZX need the `cabextract` tool, which the container image includes. Not read: `.etl` traces, which need a Windows tool to convert them. The results page lists everything that was skipped and why.
 
 ## Adding patterns
 
@@ -116,7 +116,7 @@ Create a class in `backend/app/parsers/`, subclass `LogParser`, implement `detec
 
 ## Limits
 
-Configured in `backend/.env`: `MAX_UPLOAD_MB` (200), `MAX_EXTRACTED_MB` (600), `MAX_FILE_MB` (100), `MAX_FILES` (1000). Not supported yet: 7z, RAR and CAB archives, and binary `.evtx` / `.etl` files. They are skipped and listed.
+Configured in `backend/.env`: `MAX_UPLOAD_MB` (200), `MAX_EXTRACTED_MB` (600), `MAX_FILE_MB` (100), `MAX_FILES` (1000). Not supported yet: 7z and RAR archives and binary `.etl` files. They are skipped and listed.
 
 ## API
 

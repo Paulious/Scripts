@@ -71,6 +71,11 @@
       "reason": "Exit codes from detection and remediation scripts. For these, a non-zero code usually means 'not compliant' or 'not detected', which is a result, not a failure."
     },
     {
+      "id": "evt-dcom-10016",
+      "regex": "Microsoft-Windows-DistributedCOM \\[10016\\]",
+      "reason": "DCOM permission warnings (event 10016). Windows logs these constantly and they are almost never the cause of anything."
+    },
+    {
       "id": "no-errors-text",
       "regex": "\\b(?:0|no|zero) (?:errors?|failures?)\\b",
       "reason": "Text reporting that there were no errors."

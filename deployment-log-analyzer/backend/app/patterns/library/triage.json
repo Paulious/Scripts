@@ -1,11 +1,10 @@
 {
   "rules": [
     {"id": "etl", "match": "\\.etl$", "tier": "skip", "reason": "binary trace log (needs a Windows tool to convert it)"},
-    {"id": "evtx", "match": "\\.evtx$", "tier": "skip", "reason": "Windows event logs are not read yet"},
-    {"id": "cab", "match": "\\.cab$", "tier": "skip", "reason": "CAB archives are not opened yet"},
     {"id": "dump", "match": "\\.(dmp|mdmp)$", "tier": "skip", "reason": "memory dump"},
     {"id": "not-collected", "match": "no results - error", "tier": "skip", "reason": "item was not present on the device when the package was collected"},
 
+    {"id": "evtx", "match": "\\.evtx$", "tier": "normal", "max_lines": 60000},
     {"id": "ime", "match": "intunemanagementextension|appworkload|agentexecutor|healthscripts|clienthealth|appactionprocessor|win32appinventory", "tier": "high", "max_lines": 600000},
     {"id": "installers", "match": "patchmypcinstalllogs|patchmypcintunelogs|psadt|\\.msi\\.log$", "tier": "high"},
     {"id": "identity", "match": "dsregcmd", "tier": "high"},

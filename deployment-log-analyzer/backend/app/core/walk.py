@@ -15,11 +15,12 @@ from typing import Callable, Iterator
 from app.core.archive import (
     BINARY_EXTENSIONS, ArchiveLimitError, Limits, _Expander, _read_limited, clean_path, sniff_archive, unsupported_reason,
 )
+from app.core.cab import CabError, read_cab
 from app.models import SkippedFile
 
 # Binary formats the triage rules explain themselves (so the user sees a useful reason).
 KEEP_FOR_TRIAGE = {".etl", ".evtx", ".cab", ".dmp", ".mdmp"}
-NESTED_EXT = {".zip", ".gz", ".tgz", ".tar", ".bz2", ".xz"}
+NESTED_EXT = {".zip", ".gz", ".tgz", ".tar", ".bz2", ".xz", ".cab"}
 
 
 @dataclass
@@ -40,10 +41,29 @@ def walk_upload(name: str, data: bytes, limits: Limits, depth: int = 0) -> Itera
         for f in ex.out.files:
             yield Member(f.path, len(f.data), lambda d=f.data: d)
         yield from ex.out.skipped
+    elif kind == "cab":
+        yield from _walk_cab(base, data, limits, depth)
     elif kind == "unsupported":
         yield SkippedFile(path=base, reason=unsupported_reason(data))
     else:
         yield Member(base, len(data), lambda: data)
+
+
+def _walk_cab(base: str, data: bytes, limits: Limits, depth: int) -> Iterator[Member | SkippedFile]:
+    try:
+        files = list(read_cab(data, limits))
+    except CabError as exc:
+        yield SkippedFile(path=base, reason=str(exc))
+        return
+    for name, payload in files:
+        path = clean_path(f"{base}/{name}")
+        ext = posixpath.splitext(path.lower())[1]
+        if ext in NESTED_EXT and depth < limits.max_depth:
+            yield from walk_upload(path, payload, limits, depth + 1)
+        elif ext in BINARY_EXTENSIONS and ext not in KEEP_FOR_TRIAGE:
+            yield SkippedFile(path=path, reason=f"{ext} is not a text log")
+        else:
+            yield Member(path, len(payload), lambda d=payload: d)
 
 
 def _walk_zip(base: str, data: bytes, limits: Limits, depth: int) -> Iterator[Member | SkippedFile]:

@@ -7,3 +7,6 @@ anthropic>=1,<2
 openai>=1.50
 # Optional: Entra ID (keyless) auth for Azure OpenAI
 azure-identity>=1.17
+# Windows event logs (.evtx) and cabinet files (.cab)
+evtx>=0.8
+cabarchive>=0.2.4

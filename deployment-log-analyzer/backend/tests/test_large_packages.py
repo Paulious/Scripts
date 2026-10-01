@@ -55,8 +55,7 @@ async def run(settings, data, **kw):
 
 # ---- triage ----------------------------------------------------------------------------------
 def test_triage_classifies_real_package_names():
-    assert classify("(62) Events System Events.evtx").tier == "skip"
-    assert classify("x\\mpsupportfiles.cab").tier == "skip"
+    assert classify("(62) Events System Events.evtx").tier == "normal"
     assert classify("(72) FoldersFiles windir_Logs_WindowsUpdate_etl\\a.etl").tier == "skip"
     assert classify("(11) No Results - Error [0x80070002] FoldersFiles windir_ccmsetup_logs_log\\x").tier == "skip"
     assert classify(IME).tier == "high"
@@ -86,7 +85,7 @@ async def test_package_is_triaged_and_the_real_failure_is_found(settings):
     assert all("EPM_Agent_Logs" not in p for p in paths[:2])                                  # high priority files come first
     assert paths[-1].endswith(".log") and "EPM_Agent_Logs" in paths[-1]                        # low priority files come last
     reasons = {g["reason"]: g["count"] for g in data["skipped_groups"]}
-    assert any("trace log" in r for r in reasons) and any("event logs" in r for r in reasons) and any("CAB" in r for r in reasons)
+    assert any("trace log" in r for r in reasons) and any("event log" in r for r in reasons) and any("cabinet" in r.lower() for r in reasons)
     assert any("not present on the device" in r for r in reasons)
     ids = [f["pattern_id"] for f in data["findings"]]
     assert "intune-not-detected" in ids and "dsreg-device-auth-failed" in ids

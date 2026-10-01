@@ -1,0 +1,313 @@
+{
+  "domain": "Windows event logs",
+  "patterns": [
+    {
+      "id": "evt-service-failed",
+      "title": "A Windows service failed to start or stopped",
+      "category": "system",
+      "severity": "medium",
+      "role": "cause",
+      "weight": 0.55,
+      "regex": [
+        "Service Control Manager \\[(?:7000|7001|7009|7011|7023|7024|7031|7034)\\]\\s*(?P<detail>(?:param1=)?[^ \\r\\n]{1,60})"
+      ],
+      "summary": "The Service Control Manager recorded a failure for the service '{detail}'. A service that is missing, broken or waiting on another service can stop software that depends on it.",
+      "applies_to": [
+        "windows_event_log"
+      ],
+      "remediation": [
+        {
+          "action": "Look up the service",
+          "detail": "Find out what depends on it and whether the failure is new.",
+          "command": "Get-Service -Name '<service>' | Format-List *"
+        },
+        {
+          "action": "Check its dependencies",
+          "detail": "Event 7001 means a service it needs did not start.",
+          "command": "sc.exe qc <service>"
+        },
+        {
+          "action": "Read the events around it",
+          "detail": "The same time in the System log often shows the first thing that went wrong."
+        }
+      ]
+    },
+    {
+      "id": "evt-app-crash",
+      "title": "An application crashed",
+      "category": "application",
+      "severity": "medium",
+      "role": "cause",
+      "weight": 0.5,
+      "regex": [
+        "Application Error \\[1000\\]\\s*(?P<detail>[^\\r\\n]{0,100})",
+        "Application Hang \\[1002\\]\\s*(?P<detail>[^\\r\\n]{0,100})"
+      ],
+      "summary": "Windows recorded an application crash or hang: {detail}",
+      "applies_to": [
+        "windows_event_log"
+      ],
+      "remediation": [
+        {
+          "action": "Find the faulting module",
+          "detail": "The crash entry names the module that failed; a runtime or driver is often the cause."
+        },
+        {
+          "action": "Check it is the same app Intune installed",
+          "detail": "A crash right after install points at a missing prerequisite or a corrupt package."
+        }
+      ]
+    },
+    {
+      "id": "evt-unexpected-shutdown",
+      "title": "The device shut down or restarted unexpectedly",
+      "category": "system",
+      "severity": "medium",
+      "role": "cause",
+      "weight": 0.5,
+      "regex": [
+        "Microsoft-Windows-Kernel-Power \\[41\\]",
+        "\\bEventLog \\[6008\\]"
+      ],
+      "summary": "The previous shutdown was not clean (power loss, crash or forced restart). Installs and policy runs that were in progress would have been cut off.",
+      "applies_to": [
+        "windows_event_log"
+      ],
+      "remediation": [
+        {
+          "action": "Check what ran at the time",
+          "detail": "Compare the time with Intune install and script logs."
+        },
+        {
+          "action": "Look for repeated events",
+          "detail": "More than a one-off points at hardware, drivers or a battery problem."
+        }
+      ]
+    },
+    {
+      "id": "evt-disk-error",
+      "title": "Disk or file system errors",
+      "category": "hardware",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.7,
+      "regex": [
+        "\\bdisk \\[(?:7|11|15|51|153)\\]",
+        "\\bNtfs \\[(?:55|98|137)\\]",
+        "volmgr \\[(?:46|161)\\]"
+      ],
+      "summary": "Windows logged a disk or file system problem. Failed installs, corrupt downloads and unexplained errors can follow.",
+      "applies_to": [
+        "windows_event_log"
+      ],
+      "remediation": [
+        {
+          "action": "Check the disk",
+          "detail": "Run a file system check and look at the drive's health.",
+          "command": "chkdsk C: /scan"
+        },
+        {
+          "action": "Check free space",
+          "detail": "A full system drive causes many install failures.",
+          "command": "Get-PSDrive C"
+        }
+      ]
+    },
+    {
+      "id": "evt-msi-failed",
+      "title": "A Windows Installer install failed",
+      "category": "installer",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.65,
+      "regex": [
+        "MsiInstaller \\[11708\\]\\s*(?P<detail>[^\\r\\n]{0,120})"
+      ],
+      "summary": "The Windows Installer service recorded a failed installation: {detail}",
+      "applies_to": [
+        "windows_event_log"
+      ],
+      "remediation": [
+        {
+          "action": "Get the MSI log",
+          "detail": "Re-run the install with verbose logging; this event only says it failed.",
+          "command": "msiexec /i <package.msi> /qn /l*v C:\\Temp\\install.log"
+        },
+        {
+          "action": "Search the MSI log for 'Return value 3'",
+          "detail": "The first one is the step that failed."
+        }
+      ]
+    },
+    {
+      "id": "evt-update-failed",
+      "title": "A Windows update failed to install or download",
+      "category": "update",
+      "severity": "medium",
+      "role": "cause",
+      "weight": 0.55,
+      "regex": [
+        "WindowsUpdateClient \\[(?:20|31)\\]\\s*(?P<detail>[^\\r\\n]{0,120})"
+      ],
+      "summary": "The Windows Update client recorded a failure: {detail}",
+      "applies_to": [
+        "windows_event_log"
+      ],
+      "remediation": [
+        {
+          "action": "Look up the error code",
+          "detail": "The code in the event says whether it is a download, servicing or disk problem."
+        },
+        {
+          "action": "Check CBS.log",
+          "detail": "Servicing errors are explained in C:\\Windows\\Logs\\CBS\\CBS.log."
+        }
+      ]
+    },
+    {
+      "id": "evt-appx-deployment",
+      "title": "An app package (MSIX/Store) failed to deploy",
+      "category": "installer",
+      "severity": "medium",
+      "role": "cause",
+      "weight": 0.6,
+      "regex": [
+        "AppXDeployment-Server \\[(?:401|404|454|613)\\]\\s*(?P<detail>[^\\r\\n]{0,140})"
+      ],
+      "summary": "The app package deployment service reported a failure: {detail}",
+      "applies_to": [
+        "windows_event_log"
+      ],
+      "remediation": [
+        {
+          "action": "Read the error code in the event",
+          "detail": "0x80073CF3 and similar codes name the exact problem (conflict, dependency, disk space)."
+        },
+        {
+          "action": "Check the framework dependencies",
+          "detail": "MSIX apps fail when a required VCLibs or .NET framework package is missing."
+        }
+      ]
+    },
+    {
+      "id": "evt-mdm-error",
+      "title": "Intune/MDM reported an error",
+      "category": "mdm",
+      "severity": "medium",
+      "role": "cause",
+      "weight": 0.55,
+      "regex": [
+        "Error\\s+Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider \\[(?P<detail>\\d+)\\]"
+      ],
+      "summary": "The Windows MDM client (the part of Windows that talks to Intune) logged an error-level event, ID {detail}. Policy or app settings may not have applied.",
+      "applies_to": [
+        "windows_event_log"
+      ],
+      "remediation": [
+        {
+          "action": "Read the full event",
+          "detail": "Open the event in the DeviceManagement-Enterprise-Diagnostics-Provider Admin log; it names the setting and the error code."
+        },
+        {
+          "action": "Check the profile in Intune",
+          "detail": "Find the profile or policy that owns the setting named in the event."
+        }
+      ]
+    },
+    {
+      "id": "evt-bitlocker",
+      "title": "BitLocker reported an error",
+      "category": "security",
+      "severity": "medium",
+      "role": "cause",
+      "weight": 0.55,
+      "regex": [
+        "Error\\s+Microsoft-Windows-BitLocker-API \\[(?P<detail>\\d+)\\]"
+      ],
+      "summary": "BitLocker logged an error-level event (ID {detail}). Encryption policies from Intune often fail on missing TPM, Secure Boot or recovery key backup.",
+      "applies_to": [
+        "windows_event_log"
+      ],
+      "remediation": [
+        {
+          "action": "Check TPM and Secure Boot",
+          "detail": "",
+          "command": "Get-Tpm; Confirm-SecureBootUEFI"
+        },
+        {
+          "action": "Check the BitLocker status",
+          "detail": "",
+          "command": "manage-bde -status"
+        }
+      ]
+    },
+    {
+      "id": "evt-gpo-failed",
+      "title": "Group Policy processing failed",
+      "category": "policy",
+      "severity": "medium",
+      "role": "cause",
+      "weight": 0.5,
+      "regex": [
+        "GroupPolicy \\[(?:1058|1129)\\]"
+      ],
+      "summary": "Group Policy could not be processed, usually because the domain controller or SYSVOL share could not be reached.",
+      "applies_to": [
+        "windows_event_log"
+      ],
+      "remediation": [
+        {
+          "action": "Check connectivity to the domain",
+          "detail": "Cloud-only devices can ignore this; hybrid devices need a line of sight to a domain controller."
+        }
+      ]
+    },
+    {
+      "id": "evt-applocker-block",
+      "title": "AppLocker blocked a program",
+      "category": "security",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.65,
+      "regex": [
+        "AppLocker \\[(?:8004|8007)\\]\\s*(?P<detail>[^\\r\\n]{0,140})"
+      ],
+      "summary": "AppLocker stopped something from running: {detail}",
+      "applies_to": [
+        "windows_event_log"
+      ],
+      "remediation": [
+        {
+          "action": "Check the AppLocker or WDAC policy",
+          "detail": "Allow the publisher or path, or confirm the block is intended."
+        }
+      ]
+    },
+    {
+      "id": "evt-defender-threat",
+      "title": "Microsoft Defender detected or blocked something",
+      "category": "security",
+      "severity": "medium",
+      "role": "cause",
+      "weight": 0.5,
+      "regex": [
+        "Windows Defender \\[(?:1116|1117)\\]\\s*(?P<detail>[^\\r\\n]{0,140})"
+      ],
+      "summary": "Defender recorded a detection: {detail}. If it relates to an installer, Defender may have quarantined files mid-install.",
+      "applies_to": [
+        "windows_event_log"
+      ],
+      "remediation": [
+        {
+          "action": "Check the detection history",
+          "detail": "",
+          "command": "Get-MpThreatDetection | Select-Object -First 10"
+        },
+        {
+          "action": "Exclude or re-sign the installer if it is safe",
+          "detail": "Quarantined installer files cause exit codes like 2 or 1603."
+        }
+      ]
+    }
+  ]
+}

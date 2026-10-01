@@ -23,6 +23,7 @@ from app.core import scoring
 from app.core.archive import ArchiveLimitError, Limits
 from app.core.walk import Member, walk_upload
 from app.core.case import Case
+from app.core.evtx import EvtxError, evtx_to_text
 from app.core.decoding import NotTextError, decode_bytes, looks_binary, split_lines
 from app.core.heuristic import build_heuristic
 from app.core.report import build_report
@@ -56,6 +57,11 @@ def _progress(stage: str, status: str, message: str = "", percent: int | None = 
 
 
 def _prepare(path: str, data: bytes, settings: Settings, max_lines: int | None = None) -> FileScan | SkippedFile:
+    if path.lower().endswith(".evtx"):
+        try:
+            data = evtx_to_text(data)
+        except EvtxError as exc:
+            return SkippedFile(path=path, reason=str(exc))
     try:
         text, encoding = decode_bytes(data)
     except NotTextError:
