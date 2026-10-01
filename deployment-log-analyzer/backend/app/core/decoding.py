@@ -68,6 +68,9 @@ def split_lines(text: str) -> list[str]:
     """Split on CR/LF/CRLF only. str.splitlines() also splits on form feeds and
     unicode separators, which would shift line numbers away from what the user
     sees in Notepad++ or CMTrace."""
+    # Logs that were appended to each other can carry a mid-file BOM and a CR/LF pair read at the
+    # wrong byte offset (shows up as U+0A0D). Neither is real content.
+    text = text.replace("\ufeff", "").replace("\u0a0d", "")
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     lines = text.split("\n")
     if lines and lines[-1] == "":

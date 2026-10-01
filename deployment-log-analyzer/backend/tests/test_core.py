@@ -140,3 +140,7 @@ def test_redaction_masks_secrets_but_keeps_diagnostics():
     out = redact(text)
     assert "Hunter2" not in out and "abcdefghijkl" not in out and "bob@contoso.com" not in out and "jsmith" not in out
     assert "exit code 1603" in out
+
+
+def test_stray_bom_and_misaligned_crlf_are_removed():
+    assert split_lines("a\n਍਍﻿b\n") == ["a", "b"]

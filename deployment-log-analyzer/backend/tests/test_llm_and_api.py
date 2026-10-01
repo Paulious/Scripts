@@ -304,3 +304,35 @@ async def test_provider_error_message_is_surfaced():
     p = build_provider("anthropic", Settings(_env_file=None, anthropic_api_key="k"), _aclient(lambda r: httpx2.Response(400, json=body)))
     with pytest.raises(LLMError, match="400: .*credit balance is too low"):
         await p.complete("s", "u", max_tokens=10)
+
+
+def _two_attempt_uploads():
+    first, _ = dup_failure_log()
+    text = first.decode("utf-16-le").lstrip("\ufeff")
+    both = ("\ufeff" + text.rstrip("\r\n") + "\r\n" + text.replace("17:39", "10:50").replace("17:40", "10:51")).encode("utf-16-le")
+    return [("Logs.zip", make_zip({"PatchMyPCInstallLogs/Dell.EXE.log": both}))]
+
+
+@pytest.mark.asyncio
+async def test_report_does_not_reprint_overlapping_evidence(settings):
+    events = [e async for e in run_analysis(_two_attempt_uploads(), settings=settings, provider_id="none")]
+    data = events[-1]["data"]
+    assert data["findings"][0]["attempts"] == 2
+    md = data["report_markdown"]
+    assert "same region as F1 above" in md
+    evidence_lines = [ln for ln in md.splitlines() if ln.startswith(">>") and "needs to be installed" in ln]
+    assert len(evidence_lines) == 2  # once per attempt, not once per finding
+
+
+@pytest.mark.asyncio
+async def test_llm_prompt_includes_latest_attempt_and_skips_repeats(settings):
+    import app.core.pipeline as pl
+    provider = FakeProvider([LLM_REPLY])
+    orig = pl.build_provider
+    pl.build_provider = lambda *_a, **_k: provider
+    try:
+        _ = [e async for e in run_analysis(_two_attempt_uploads(), settings=settings, provider_id="x")]
+    finally:
+        pl.build_provider = orig
+    user = provider.calls[0][1]
+    assert "first attempt" in user and "latest attempt" in user and "same region as an earlier block" in user

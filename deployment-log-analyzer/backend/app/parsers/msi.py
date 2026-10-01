@@ -33,6 +33,7 @@ _ERROR_RX = [
 _NOISE_RX = re.compile(
     r"MSIHANDLE|Note: 1: 22(?:05|28|62|27)|^Property\([SCN]\):|PROPERTY CHANGE|SHELL32::SHGetFolderPath"
     r"|APPCOMPAT:|Note: 1: 2727|Resetting cached policy|Machine policy value|User policy value|Entering CMsiConfigurationManager"
+    r"|Setting cached product context|Using cached product context|Running as a service|Closing MSIHANDLE"
     r"|Grabbed execution mutex|Releasing (?:execution )?mutex|^\s*$"
 )
 

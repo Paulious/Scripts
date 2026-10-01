@@ -32,9 +32,15 @@ def _window_text(w: EvidenceWindow, radius: int | None) -> str:
     return _fence(out)
 
 
-def _evidence(f: Finding, full: bool) -> str:
+def _evidence(f: Finding, full: bool, shown: dict[str, list[tuple[int, int, str]]] | None = None) -> str:
     parts: list[str] = []
+    shown = shown if shown is not None else {}
     for w in f.evidence:
+        prior = next((fid for a, b, fid in shown.get(w.file, []) if a <= w.anchor_line <= b), None)
+        if prior:
+            parts.append(f"`{w.file}` around line {w.anchor_line}: same region as {prior} above.")
+            continue
+        shown.setdefault(w.file, []).append((w.start_line, w.end_line, f.id))
         lo, hi = w.start_line, w.end_line
         label = f"`{w.file}` lines {lo}-{hi}" if full else f"`{w.file}` around line {w.anchor_line}"
         parts.append(f"{label}\n\n{_window_text(w, None if full else SHORT_CONTEXT)}")
@@ -82,6 +88,7 @@ def build_report(r: AnalysisResult) -> str:
         md += ["", "## How to confirm it is fixed", ""] + [f"- {v}" for v in a.verification]
 
     findings = {f.id: f for f in r.findings}
+    printed: dict[str, list[tuple[int, int, str]]] = {}
     if rc:
         shown = [findings[i] for i in rc.finding_ids if i in findings]
         if shown:
@@ -89,7 +96,7 @@ def build_report(r: AnalysisResult) -> str:
             for f in shown:
                 md += [f"### {f.id}: {f.title}", "", f"{f.file}, first seen at line {f.first_line}"
                        + (f", {f.first_timestamp}" if f.first_timestamp else "")
-                       + (f". {f.attempts} separate attempts." if f.attempts > 1 else "."), "", _evidence(f, True), ""]
+                       + (f". {f.attempts} separate attempts." if f.attempts > 1 else "."), "", _evidence(f, True, printed), ""]
 
     if a.contributing_factors:
         md += ["", "## Other things worth knowing", ""] + [f"- {c}" for c in a.contributing_factors]
@@ -104,7 +111,7 @@ def build_report(r: AnalysisResult) -> str:
         if extra:
             md += ["", "### Evidence for the next findings", ""]
             for f in extra:
-                md += [f"#### {f.id}: {f.title}", "", _evidence(f, False), ""]
+                md += [f"#### {f.id}: {f.title}", "", _evidence(f, False, printed), ""]
 
     md += ["", "## Files analysed", "", "| File | Detected as | Lines | Errors | Warnings |", "|---|---|---|---|---|"]
     for f in r.files:

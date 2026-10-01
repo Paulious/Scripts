@@ -50,10 +50,7 @@ Reply with ONE JSON object and nothing else (no markdown fences), exactly this s
 If the logs show no failure at all, set root_cause to null and explain in summary."""
 
 
-def _evidence_block(f: Finding, radius: int) -> str:
-    if not f.evidence:
-        return ""
-    w = f.evidence[0]
+def _lines_block(f: Finding, w, radius: int, title: str) -> str:
     out: list[str] = []
     skipped = 0
     for ln in w.lines:
@@ -64,15 +61,31 @@ def _evidence_block(f: Finding, radius: int) -> str:
             continue
         flag = ">>" if ln.anchor else ("> " if ln.match else "  ")
         out.append(f"{flag} L{ln.n}: {ln.text}")
-    head = f"[{f.id}] {f.file} lines {w.anchor_line - radius}-{w.anchor_line + radius} (anchor L{w.anchor_line}; {skipped} chatter lines hidden)"
+    head = f"[{f.id}] {title} {w.file} lines {w.anchor_line - radius}-{w.anchor_line + radius} (anchor L{w.anchor_line}; {skipped} chatter lines hidden)"
     return head + "\n" + "\n".join(out)
+
+
+def _evidence_blocks(findings: list[Finding], radius: int) -> list[str]:
+    """First attempt in full, latest attempt in a smaller window, and no repeats of lines
+    another finding in the same file has already shown."""
+    covered: dict[str, list[tuple[int, int]]] = {}
+    blocks: list[str] = []
+    for f in findings:
+        for i, w in enumerate(f.evidence[:2]):
+            r = radius if i == 0 else max(8, radius // 3)
+            lo, hi = w.anchor_line - r, w.anchor_line + r
+            if any(a <= w.anchor_line <= b for a, b in covered.get(w.file, [])):
+                blocks.append(f"[{f.id}] {w.file} L{w.anchor_line}: same region as an earlier block above.")
+                continue
+            covered.setdefault(w.file, []).append((lo, hi))
+            blocks.append(_lines_block(f, w, r, "first attempt," if i == 0 and len(f.evidence) > 1 else "latest attempt," if i else ""))
+    return blocks
 
 
 def render_evidence(findings: list[Finding], budget_chars: int) -> str:
     """Shrink every window around its anchor until the total fits the budget."""
     for radius in (100, 70, 50, 35, 25, 15, 8):
-        blocks = [_evidence_block(f, radius) for f in findings]
-        text = "\n\n".join(b for b in blocks if b)
+        text = "\n\n".join(b for b in _evidence_blocks(findings, radius) if b)
         if len(text) <= budget_chars or radius == 8:
             return text[:budget_chars]
     return ""
