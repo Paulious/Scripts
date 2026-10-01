@@ -63,7 +63,7 @@ If a provider call fails (rate limit, refusal, bad JSON), the user still gets th
 
 ## Privacy and data handling
 
-- Nothing is stored. There is no database, no job queue, no session store. A request is read into memory, analysed, streamed back, and dropped.
+- Nothing is stored. There is no database, no job queue, no session store. A request is read into memory and analysed, and progress is streamed back. The finished result waits in memory for the browser to collect in small pieces (some hosts cut large replies), and is dropped as soon as it has, or after ten minutes. Nothing is written to disk. Because of this the API runs as a single copy.
 - Archives are expanded in memory. Size, file count, nesting depth and compression ratio are all limited.
 - Only excerpts go to the LLM, not whole files. Before they go, passwords, tokens, SAS signatures, emails and `C:\Users\<name>` are masked (switch off per request if you need to).
 - The log text is treated as untrusted. The prompt tells the model to ignore instructions found inside logs, and the model's output is validated before use. A finding ID it makes up is ignored.

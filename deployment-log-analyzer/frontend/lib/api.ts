@@ -9,10 +9,29 @@ export async function fetchConfig(signal?: AbortSignal): Promise<AppConfig> {
   return res.json();
 }
 
-type PartEvent =
-  | { type: "result_begin"; data: AnalysisResult; count: number }
-  | { type: "result_finding"; data: AnalysisResult["findings"][number] }
-  | { type: "result_end" };
+type ReadyEvent = { type: "result_ready"; id: string; parts: number };
+
+/** The result is too big for one reply on some hosts, so it is collected in small pieces. */
+async function collectResult(ev: ReadyEvent, signal: AbortSignal): Promise<AnalysisResult> {
+  const pieces: string[] = [];
+  for (let i = 0; i < ev.parts; i++) {
+    let text: string | null = null;
+    for (let attempt = 0; attempt < 3 && text === null; attempt++) {
+      try {
+        const res = await fetch(`${API_URL}/api/result/${ev.id}/${i}`, { signal, cache: "no-store" });
+        if (res.status === 404) throw new Error("The result expired before it could be collected. Run the analysis again.");
+        if (res.ok) text = await res.text();
+      } catch (err) {
+        if (signal.aborted || (err instanceof Error && err.message.startsWith("The result expired"))) throw err;
+      }
+    }
+    if (text === null) throw new Error("Could not collect the finished result from the analysis service.");
+    pieces.push(text);
+  }
+  // Tell the server it can forget it. Best effort.
+  fetch(`${API_URL}/api/result/${ev.id}`, { method: "DELETE" }).catch(() => undefined);
+  return JSON.parse(pieces.join("")) as AnalysisResult;
+}
 
 interface StreamOptions {
   path: string;
@@ -36,8 +55,8 @@ function postStream(opts: StreamOptions): Promise<void> {
     let consumed = 0;
     let buffer = "";
     let finished = false;
-    // A result arrives as result_begin, one result_finding per finding, then result_end.
-    let assembling: AnalysisResult | null = null;
+    const pending: Promise<void>[] = [];
+    let failed: Error | null = null;
 
     const drain = () => {
       buffer += xhr.responseText.slice(consumed);
@@ -48,17 +67,17 @@ function postStream(opts: StreamOptions): Promise<void> {
         buffer = buffer.slice(nl + 1);
         if (!line) continue;
         try {
-          const ev = JSON.parse(line) as StreamEvent | PartEvent;
-          if (ev.type === "result_begin") {
-            assembling = ev.data;
-          } else if (ev.type === "result_finding") {
-            assembling?.findings.push(ev.data);
-          } else if (ev.type === "result_end") {
-            if (assembling) {
-              finished = true;
-              opts.onEvent({ type: "result", data: assembling });
-              assembling = null;
-            }
+          const ev = JSON.parse(line) as StreamEvent | ReadyEvent;
+          if (ev.type === "result_ready") {
+            finished = true;
+            pending.push(
+              collectResult(ev, opts.signal).then(
+                (data) => opts.onEvent({ type: "result", data }),
+                (err) => {
+                  failed = err instanceof Error ? err : new Error(String(err));
+                },
+              ),
+            );
           } else {
             if (ev.type === "result" || ev.type === "error") finished = true;
             opts.onEvent(ev);
@@ -88,8 +107,11 @@ function postStream(opts: StreamOptions): Promise<void> {
         return;
       }
       drain();
-      if (!finished) reject(new Error("The connection closed before the analysis finished"));
-      else resolve();
+      if (!finished) {
+        reject(new Error("The connection closed before the analysis finished"));
+        return;
+      }
+      Promise.all(pending).then(() => (failed ? reject(failed) : resolve()));
     };
     xhr.onerror = () => {
       // Say how far it got: that tells us whether the request never arrived or the stream was cut part way.

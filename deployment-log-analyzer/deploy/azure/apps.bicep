@@ -101,14 +101,9 @@ resource api 'Microsoft.App/containerApps@2024-03-01' = {
         }
       ]
       scale: {
-        minReplicas: 0
-        maxReplicas: 3
-        rules: [
-          {
-            name: 'http'
-            http: { metadata: { concurrentRequests: '2' } }
-          }
-        ]
+        // One copy only: a finished result waits in this app's memory until the browser has collected it.
+        minReplicas: 1
+        maxReplicas: 1
       }
     }
   }

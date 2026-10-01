@@ -4,11 +4,12 @@ import asyncio
 import json
 import logging
 import resource
+import secrets
 import time
 from typing import AsyncIterator
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
 
 from app.config import get_settings
@@ -84,18 +85,52 @@ def _line(ev: dict) -> bytes:
     return (json.dumps(ev, separators=(",", ":")) + "\n").encode()
 
 
+# Azure's ingress cuts a single reply somewhere between 200 and 400 KB. A finished result is often bigger
+# than that, so the stream only announces it and the browser fetches it in small pieces.
+PART_CHARS = 50_000
+RESULT_TTL = 600
+MAX_HELD = 20
+_held: dict[str, tuple[float, list[str]]] = {}
+
+
+def _sweep() -> None:
+    now = time.monotonic()
+    for key in [k for k, (exp, _) in _held.items() if exp < now]:
+        del _held[key]
+    while len(_held) > MAX_HELD:
+        del _held[min(_held, key=lambda k: _held[k][0])]
+
+
+def hold_result(data: dict) -> dict:
+    """Keep a finished result in memory for a few minutes so the browser can collect it in pieces.
+    Nothing touches disk, and it is dropped as soon as the browser says it has it."""
+    _sweep()
+    text = json.dumps(data, separators=(",", ":"))
+    parts = [text[i:i + PART_CHARS] for i in range(0, len(text), PART_CHARS)] or [""]
+    rid = secrets.token_urlsafe(16)
+    _held[rid] = (time.monotonic() + RESULT_TTL, parts)
+    return {"type": "result_ready", "id": rid, "parts": len(parts)}
+
+
+@router.get("/result/{rid}/{index}")
+async def result_part(rid: str, index: int):
+    _sweep()
+    entry = _held.get(rid)
+    if not entry or not 0 <= index < len(entry[1]):
+        raise HTTPException(404, "That result has expired. Run the analysis again.")
+    return PlainTextResponse(entry[1][index], headers={"Cache-Control": "no-store"})
+
+
+@router.delete("/result/{rid}")
+async def result_done(rid: str):
+    _held.pop(rid, None)
+    return {"ok": True}
+
+
 def _encode(ev: dict) -> list[bytes]:
-    """A finished result can be several hundred KB. Some proxies cope badly with one huge
-    message in a streamed response, so it is sent as a header plus one small message per finding.
-    The browser stitches them back together."""
-    if ev.get("type") != "result":
-        return [_line(ev)]
-    data = ev["data"]
-    findings = data.get("findings", [])
-    out = [_line({"type": "result_begin", "data": {**data, "findings": []}, "count": len(findings)})]
-    out += [_line({"type": "result_finding", "data": f}) for f in findings]
-    out.append(_line({"type": "result_end"}))
-    return out
+    if ev.get("type") == "result":
+        return [_line(hold_result(ev["data"]))]
+    return [_line(ev)]
 
 
 async def _stream(events: AsyncIterator[dict]) -> AsyncIterator[bytes]:

@@ -241,13 +241,17 @@ def test_provider_selection_rules():
     assert {p.id: p.configured for p in list_providers(both)} == {"anthropic": True, "azure_openai": False, "openai": True, "none": True}
 
 
-def _reassemble(events):
-    """What the browser does with result_begin / result_finding / result_end."""
-    begin = next(e for e in events if e["type"] == "result_begin")
-    data = begin["data"]
-    data["findings"] = [e["data"] for e in events if e["type"] == "result_finding"]
-    assert len(data["findings"]) == begin["count"]
-    return data
+def _reassemble(events, client):
+    """What the browser does: the stream announces the result, then it is fetched in small pieces."""
+    ready = next(e for e in events if e["type"] == "result_ready")
+    pieces = []
+    for i in range(ready["parts"]):
+        r = client.get(f"/api/result/{ready['id']}/{i}")
+        assert r.status_code == 200 and len(r.text) <= 50_000
+        pieces.append(r.text)
+    assert client.delete(f"/api/result/{ready['id']}").status_code == 200
+    assert client.get(f"/api/result/{ready['id']}/0").status_code == 404  # forgotten once collected
+    return json.loads("".join(pieces))
 
 
 # ---- HTTP API ----------------------------------------------------------------------
@@ -278,14 +282,13 @@ def test_analyze_streams_progress_then_result(client):
     assert r.headers["cache-control"] == "no-store"
     events = [json.loads(line) for line in r.text.splitlines() if line]
     assert events[0]["type"] == "progress"
-    data = _reassemble(events)
+    data = _reassemble(events, client)
     assert data["context"] == "Dell Command Update via Patch My PC"
     assert data["findings"][0]["pattern_id"] == "dep-dotnet-missing"
-    # the result is split into small messages instead of one big one
+    # the result is not inside the stream; only a small "ready" message is
     kinds = [e["type"] for e in events]
-    assert kinds[-1] == "result_end" and "result_begin" in kinds and kinds.count("result_finding") == len(data["findings"])
-    assert max(len(line) for line in r.text.splitlines()) < len(json.dumps(data)) / 2
-    assert "result" not in kinds
+    assert kinds[-1] == "result_ready" and "result" not in kinds
+    assert len(r.text) < len(json.dumps(data)) or len(json.dumps(data)) < 5000
 
 
 def test_upload_limit_returns_413(monkeypatch, settings):
@@ -415,7 +418,7 @@ def test_enhance_endpoint_rejects_missing_provider_and_bad_body(client):
     r = client.post("/api/enhance", json={"result": {"nope": 1}, "provider": "none"})
     assert r.status_code == 422
     base = client.post("/api/analyze", files=[("files", ("a.log", b"2026-01-01 00:00:00 ERROR boom\n", "text/plain"))], data={"provider": "none"})
-    result = _reassemble([json.loads(line) for line in base.text.splitlines() if line])
+    result = _reassemble([json.loads(line) for line in base.text.splitlines() if line], client)
     r = client.post("/api/enhance", json={"result": result, "provider": "none"})
     assert r.status_code == 400
 
@@ -439,3 +442,13 @@ def test_evidence_flags_are_left_out_when_false_and_still_round_trip():
     hit = EvidenceLine(n=2, text="y", match=True, anchor=True).model_dump(mode="json")
     assert hit == {"n": 2, "text": "y", "match": True, "anchor": True}
     assert EvidenceLine.model_validate(plain).noise is False
+
+
+def test_unknown_or_expired_result_is_404(client):
+    assert client.get("/api/result/nope/0").status_code == 404
+
+
+def test_large_result_is_cut_into_small_parts():
+    import app.api.routes as routes
+    ev = routes.hold_result({"blob": "x" * 220_000})
+    assert ev["type"] == "result_ready" and ev["parts"] >= 5
