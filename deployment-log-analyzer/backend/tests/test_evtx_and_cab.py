@@ -107,3 +107,29 @@ def test_cab_without_a_usable_reader_is_skipped_with_a_reason(small_cab, monkeyp
     monkeypatch.setattr(cabmod.shutil, "which", lambda _: None)
     items = list(walk_upload("pack.cab", small_cab, Limits(max_total_bytes=10**7, max_file_bytes=10**7, max_files=100, max_depth=3)))
     assert len(items) == 1 and "LZX" in items[0].reason
+
+
+ENTRA = ("2026-09-30 10:00:00 ERROR script failed: AADSTS700016: Application with identifier "
+         "'1659b7df-78bd-4907-81bc-717b5890bd10' was not found in the directory 'x'\n")
+
+
+@pytest.mark.asyncio
+async def test_same_problem_in_many_logs_is_one_finding_and_cabinet_copies_are_skipped(settings):
+    from cabarchive import CabArchive, CabFile
+    from app.core.pipeline import run_analysis
+    body = ("noise line\n" * 20 + ENTRA + "noise line\n" * 20).encode()
+    cab = CabArchive()
+    cab["healthscripts.log"] = CabFile(body)           # a copy of the loose file
+    zipped = make_zip({
+        "logs/healthscripts.log": body,
+        "logs/healthscripts-20260928.log": body + body,   # a rotated log with the same problem twice
+        "mdm/mdmlogs.cab": cab.save(compress=True),
+    })
+    events = [e async for e in run_analysis([("Diag.zip", zipped)], settings=settings, provider_id="none")]
+    result = next(e for e in events if e["type"] == "result")["data"]
+    entra = [f for f in result["findings"] if f["pattern_id"] == "entra-app-not-found"]
+    assert len(entra) == 1
+    assert entra[0]["other_files"] and entra[0]["match_count"] == 3
+    reasons = [s["reason"] for s in result["skipped"]]
+    assert any("copy of a log" in r for r in reasons)
+    assert all(".cab/" not in f["path"] for f in result["files"])

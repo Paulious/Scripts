@@ -91,6 +91,8 @@ class Finding(BaseModel):
     score: float
     explanation: str
     related_files: list[str] = Field(default_factory=list)
+    # Other logs where the same pattern also matched. match_count and attempts already include them.
+    other_files: list[str] = Field(default_factory=list)
     evidence: list[EvidenceWindow] = Field(default_factory=list)
     evidence_trimmed: bool = False
 

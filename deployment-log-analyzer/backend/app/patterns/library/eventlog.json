@@ -85,6 +85,32 @@
       ]
     },
     {
+      "id": "evt-disk-retry",
+      "title": "Disk reads or writes had to be retried",
+      "category": "hardware",
+      "severity": "medium",
+      "role": "cause",
+      "weight": 0.45,
+      "regex": [
+        "\\bdisk \\[(?:51|153)\\]"
+      ],
+      "summary": "Windows had to retry disk operations (events 51 and 153). A few are normal; hundreds point at a failing drive, cable or storage driver, and slow disks make installs time out.",
+      "applies_to": [
+        "windows_event_log"
+      ],
+      "remediation": [
+        {
+          "action": "Check the drive's health",
+          "detail": "Look at SMART status or the vendor's diagnostic tool.",
+          "command": "Get-PhysicalDisk | Select FriendlyName, HealthStatus, OperationalStatus"
+        },
+        {
+          "action": "Check the storage driver",
+          "detail": "A recent driver or firmware change is a common trigger."
+        }
+      ]
+    },
+    {
       "id": "evt-disk-error",
       "title": "Disk or file system errors",
       "category": "hardware",
@@ -92,7 +118,7 @@
       "role": "cause",
       "weight": 0.7,
       "regex": [
-        "\\bdisk \\[(?:7|11|15|51|153)\\]",
+        "\\bdisk \\[(?:7|11|15)\\]",
         "\\bNtfs \\[(?:55|98|137)\\]",
         "volmgr \\[(?:46|161)\\]"
       ],

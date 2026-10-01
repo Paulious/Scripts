@@ -27,7 +27,7 @@ from app.core.evtx import EvtxError, evtx_to_text
 from app.core.decoding import NotTextError, decode_bytes, looks_binary, split_lines
 from app.core.heuristic import build_heuristic
 from app.core.report import build_report
-from app.core.scanner import FileScan, build_findings, link_by_mentions, mentioned_files, scan_entries
+from app.core.scanner import FileScan, build_findings, MAX_UNCLASSIFIED, link_by_mentions, mentioned_files, merge_across_files, scan_entries
 from app.llm import LLMError, LLMProvider, build_provider, resolve_provider_id
 from app.llm.output import LLMOutput, parse_output
 from app.llm.prompts import SYSTEM_PROMPT, build_case_file
@@ -129,6 +129,10 @@ class FileResult:
     size: int
 
 
+def _base(path: str) -> str:
+    return path.replace("\\", "/").rsplit("/", 1)[-1].lower()
+
+
 def build_plan(members: list[Member]) -> tuple[list[PlanItem], list[SkippedFile]]:
     """Decide from names and sizes alone what to read, and in what order."""
     skipped: list[SkippedFile] = []
@@ -139,6 +143,20 @@ def build_plan(members: list[Member]) -> tuple[list[PlanItem], list[SkippedFile]
             skipped.append(SkippedFile(path=m.path, reason=d.reason or "not a useful log"))
         else:
             items.append(PlanItem(m, d))
+
+    # Diagnostics bundles often carry a second copy of the same logs inside a .cab. Reading both only
+    # doubles every finding, so a cabinet copy is skipped when a loose file with the same name and
+    # about the same size is in the package.
+    loose: dict[str, list[int]] = defaultdict(list)
+    for it in items:
+        if ".cab/" not in it.path.lower():
+            loose[_base(it.path)].append(it.member.size)
+    copies: set[int] = set()
+    for it in items:
+        if ".cab/" in it.path.lower() and any(abs(sz - it.member.size) <= 0.15 * max(sz, it.member.size, 1) for sz in loose.get(_base(it.path), [])):
+            copies.add(id(it))
+            skipped.append(SkippedFile(path=it.path, reason="copy of a log that is already in the package; the loose file was read"))
+    items = [it for it in items if id(it) not in copies]
 
     # Some groups (for example 77 rotated agent logs) only need their newest files.
     by_rule: dict[str, list[PlanItem]] = defaultdict(list)
@@ -322,13 +340,19 @@ async def run_analysis(
 
     yield _progress("evidence", "running", "Ranking and linking findings", 50)
     links = link_by_mentions(mentions)
+    all_findings, left_out = merge_across_files(all_findings)
     ranked = scoring.rank(all_findings)
     for idx, f in enumerate(ranked):
         f.related_files = sorted(links.get(f.file, set()))[:5]
         if idx >= settings.max_findings_with_evidence:
             f.evidence, f.evidence_trimmed = [], True
+    noise = _suppressed_summary(suppressed_counts, suppressed_examples, lib)
+    if left_out:
+        noise.append(SuppressedNoise(
+            id="unclassified-extra", count=left_out, example="",
+            reason=f"Error-level lines in {left_out} more file{'s' if left_out != 1 else ''} that match no pattern. Only the busiest {MAX_UNCLASSIFIED} files are listed."))
     case = Case(context=context, files=infos, skipped=skipped[:200], findings=ranked,
-                suppressed=_suppressed_summary(suppressed_counts, suppressed_examples, lib), links=links, library=lib,
+                suppressed=noise, links=links, library=lib,
                 top=ranked[0] if ranked else None)
     yield _progress("evidence", "done", f"{len(ranked)} finding(s)", 100)
 

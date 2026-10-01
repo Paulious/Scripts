@@ -251,8 +251,8 @@
       "role": "cause",
       "weight": 0.6,
       "regex": [
-        "quarantin",
-        "(?:Defender|antivirus|security software|EDR)[^\\r\\n]{0,60}(?:blocked|removed|interfer)"
+        "\\b(?:was|were|been|got) quarantined\\b",
+        "(?:Defender|antivirus|security software|EDR)[^\\r\\n]{0,60}(?:blocked (?:the )?(?:install|file|process|script)|interfer)"
       ],
       "summary": "Security software appears to have blocked or removed something.",
       "remediation": [

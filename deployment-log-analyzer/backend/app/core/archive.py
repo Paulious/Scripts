@@ -30,7 +30,7 @@ UNSUPPORTED = {
 BINARY_EXTENSIONS = {
     ".exe", ".dll", ".sys", ".msi", ".msp", ".msu", ".cab", ".png", ".jpg", ".jpeg", ".gif",
     ".bmp", ".ico", ".pdf", ".docx", ".xlsx", ".pptx", ".etl", ".evtx", ".dmp", ".mdmp",
-    ".vhd", ".vhdx", ".iso", ".wim", ".nupkg", ".appx", ".msix", ".mp4", ".mov", ".so",
+    ".vhd", ".vhdx", ".iso", ".wim", ".nupkg", ".appx", ".msix", ".mp4", ".mov", ".so", ".bin", ".dat",
 }
 
 

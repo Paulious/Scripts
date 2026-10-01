@@ -67,6 +67,7 @@ export interface Finding {
   score: number;
   explanation: string;
   related_files: string[];
+  other_files?: string[];
   evidence: EvidenceWindow[];
   evidence_trimmed: boolean;
 }

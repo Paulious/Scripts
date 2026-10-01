@@ -271,3 +271,45 @@ def link_files(scans: list[FileScan]) -> dict[str, set[str]]:
                 links[s.path].add(other)
                 links[other].add(s.path)
     return links
+
+
+MAX_UNCLASSIFIED = 10
+MAX_OTHER_FILES = 12
+
+
+def merge_across_files(findings: list[Finding]) -> tuple[list[Finding], int]:
+    """The same pattern matching in ten rotated logs is one problem, not ten.
+
+    Each pattern keeps its strongest finding; the others are folded into it (their hits and attempts are
+    added, their file names are listed). "Error-level messages not covered by the pattern library" is
+    per file by nature, so only the busiest few files are kept and the rest are counted.
+    Returns the merged findings and how many unclassified findings were left out."""
+    by_pattern: dict[str, list[Finding]] = defaultdict(list)
+    for f in findings:
+        by_pattern[f.pattern_id].append(f)
+    out: list[Finding] = []
+    left_out = 0
+    for pattern_id, group in by_pattern.items():
+        if pattern_id == "unclassified-errors":
+            group.sort(key=lambda f: -f.match_count)
+            out += group[:MAX_UNCLASSIFIED]
+            left_out += len(group[MAX_UNCLASSIFIED:])
+            continue
+        group.sort(key=lambda f: (-f.score, -f.match_count, f.file))
+        primary, rest = group[0], group[1:]
+        if rest:
+            primary.other_files = [f.file for f in rest][:MAX_OTHER_FILES]
+            primary.match_count += sum(f.match_count for f in rest)
+            primary.attempts += sum(f.attempts for f in rest)
+            stamps = [t for f in group for t in (f.first_timestamp, f.last_timestamp) if t]
+            if stamps:
+                primary.first_timestamp, primary.last_timestamp = min(stamps), max(stamps)
+            for f in rest:
+                for d in f.details:
+                    if d not in primary.details and len(primary.details) < 6:
+                        primary.details.append(d)
+                for c in f.error_codes:
+                    if c not in primary.error_codes and len(primary.error_codes) < 6:
+                        primary.error_codes.append(c)
+        out.append(primary)
+    return out, left_out

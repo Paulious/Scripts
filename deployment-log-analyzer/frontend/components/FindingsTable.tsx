@@ -63,6 +63,9 @@ export function FindingsTable({ findings, rootIds }: { findings: Finding[]; root
                       {baseName(f.file)}:{f.first_line}
                       {f.last_line !== f.first_line ? `-${f.last_line}` : ""}
                       {f.first_timestamp ? ` · ${f.first_timestamp}` : ""}
+                      {f.other_files && f.other_files.length > 0
+                        ? ` · also in ${f.other_files.length} other log${f.other_files.length === 1 ? "" : "s"}`
+                        : ""}
                     </span>
                   </span>
                   <span className="hidden shrink-0 items-center gap-1.5 sm:flex">

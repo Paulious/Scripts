@@ -99,7 +99,9 @@ def build_report(r: AnalysisResult) -> str:
             for f in shown:
                 md += [f"### {f.id}: {f.title}", "", f"{f.file}, first seen at line {f.first_line}"
                        + (f", {f.first_timestamp}" if f.first_timestamp else "")
-                       + (f". {f.attempts} separate attempts." if f.attempts > 1 else "."), "", _evidence(f, True, printed), ""]
+                       + (f". {f.attempts} separate attempts." if f.attempts > 1 else ".")
+                       + (f" Also found in {len(f.other_files)} other log{'s' if len(f.other_files) != 1 else ''}: " + ", ".join(f"`{o.rsplit('/', 1)[-1]}`" for o in f.other_files[:6]) + ("..." if len(f.other_files) > 6 else ".") if f.other_files else ""),
+                       "", _evidence(f, True, printed), ""]
 
     if a.contributing_factors:
         md += ["", "## Other things worth knowing", ""] + [f"- {c}" for c in a.contributing_factors]
