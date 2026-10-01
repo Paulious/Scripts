@@ -1,0 +1,124 @@
+{
+  "domain": "Patch My PC and vendor installers",
+  "patterns": [
+    {
+      "id": "pmpc-nonzero-exit",
+      "title": "Patch My PC install returned a non-zero exit code",
+      "category": "exit-code",
+      "severity": "high",
+      "role": "symptom",
+      "weight": 0.4,
+      "regex": [
+        "(?:Installation finished\\. Exit code:|End of installation\\. Exit code is:|End of Script Runner\\. Exit code is:|Exiting With code:)\\s*(?P<detail>-?(?!0(?![0-9]))\\d+)"
+      ],
+      "summary": "ScriptRunner finished with exit code {detail}. Patch My PC passes the installer's own exit code through, so this tells you the install failed but not why.",
+      "applies_to": [
+        "patchmypc_scriptrunner"
+      ],
+      "ignore_details": [
+        "^(?:0|1707|3010|1641)$"
+      ],
+      "remediation": [
+        {
+          "action": "Open the installer's own log",
+          "detail": "ScriptRunner names it in the 'Running EXE File ... /l=' line; that file is in C:\\ProgramData\\PatchMyPCInstallLogs."
+        },
+        {
+          "action": "Look up the exit code",
+          "detail": "Check the vendor's documented exit codes for this installer."
+        }
+      ]
+    },
+    {
+      "id": "pmpc-prescript-failed",
+      "title": "Patch My PC pre-install script failed",
+      "category": "script",
+      "severity": "high",
+      "role": "cause",
+      "weight": 0.75,
+      "regex": [
+        "File (?P<detail>\\S+\\.ps1) exited with return code:? ?(?!0(?![0-9]))-?\\d+"
+      ],
+      "summary": "A pre-install script ({detail}) returned a failure code and the install was set to stop when that happens.",
+      "applies_to": [
+        "patchmypc_scriptrunner"
+      ],
+      "remediation": [
+        {
+          "action": "Test the script",
+          "detail": "Run it as SYSTEM with the same arguments and read the output."
+        },
+        {
+          "action": "Review the abort setting",
+          "detail": "If the clean-up is optional, change the 'abort on fail' option on the Patch My PC app."
+        }
+      ]
+    },
+    {
+      "id": "pmpc-install-aborted",
+      "title": "Patch My PC aborted the install",
+      "category": "installer",
+      "severity": "medium",
+      "role": "cause",
+      "weight": 0.6,
+      "regex": [
+        "installation (?:was )?aborted",
+        "install aborted",
+        "aborting installation"
+      ],
+      "summary": "ScriptRunner stopped the install deliberately, typically because of a running process or a failed check.",
+      "applies_to": [
+        "patchmypc_scriptrunner"
+      ],
+      "remediation": [
+        {
+          "action": "Check the lines above",
+          "detail": "The reason is logged just before the abort."
+        }
+      ]
+    },
+    {
+      "id": "pmpc-blocking-process",
+      "title": "A blocking process was running",
+      "category": "installer",
+      "severity": "medium",
+      "role": "cause",
+      "weight": 0.6,
+      "regex": [
+        "blocking process(?:es)?[^\\r\\n]{0,60}(?:is running|are running|was running|detected|found)"
+      ],
+      "summary": "The app being updated was running and blocked the install.",
+      "applies_to": [
+        "patchmypc_scriptrunner"
+      ],
+      "remediation": [
+        {
+          "action": "Adjust the blocking-process policy",
+          "detail": "Allow Patch My PC to close the process, or schedule updates outside working hours."
+        }
+      ]
+    },
+    {
+      "id": "dell-dup-failed",
+      "title": "Dell Update Package reported a failure",
+      "category": "exit-code",
+      "severity": "high",
+      "role": "symptom",
+      "weight": 0.45,
+      "regex": [
+        "Name of Exit Code:\\s*(?P<detail>(?!SUCCESS\\b|REBOOT_REQUIRED\\b)[A-Z_]+)",
+        "Result:\\s*FAILURE"
+      ],
+      "summary": "The Dell Update Package finished with the result '{detail}'. A DEP_* code means a dependency or prerequisite was not satisfied; the specific one is logged earlier.",
+      "applies_to": [
+        "dell_dup"
+      ],
+      "remediation": [
+        {
+          "action": "Read what the DUP checked",
+          "detail": "Search the DUP log for 'needs to be installed', 'not supported' or 'Setup aborted'."
+        }
+      ]
+    }
+  ]
+}

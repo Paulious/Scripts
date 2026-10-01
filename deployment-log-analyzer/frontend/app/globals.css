@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+/* Dark mode is class based so the toggle (and the saved choice) win over the OS setting. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Colour tokens follow the Fluent 2 neutral + brand palette. */
+:root {
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --surface-2: #f5f5f5;
+  --line: #e0e0e0;
+  --line-strong: #c7c7c7;
+  --fg: #242424;
+  --subtle: #616161;
+  --faint: #8a8a8a;
+  --brand: #0f6cbd;
+  --brand-hover: #115ea3;
+  --brand-soft: #ebf3fc;
+  --on-brand: #ffffff;
+  --danger: #b10e1c;
+  --danger-soft: #fdf3f4;
+  --warn: #bc4b09;
+  --warn-soft: #fdf6f3;
+  --ok: #107c10;
+  --ok-soft: #f1faf1;
+  --code-bg: #fbfbfb;
+  color-scheme: light;
+}
+
+.dark {
+  --bg: #1b1b1b;
+  --surface: #262626;
+  --surface-2: #2e2e2e;
+  --line: #3d3d3d;
+  --line-strong: #5c5c5c;
+  --fg: #ffffff;
+  --subtle: #d1d1d1;
+  --faint: #9e9e9e;
+  --brand: #479ef5;
+  --brand-hover: #62abf5;
+  --brand-soft: #0c2a45;
+  --on-brand: #0b0b0b;
+  --danger: #dc626d;
+  --danger-soft: #3b1a1e;
+  --warn: #f1a26b;
+  --warn-soft: #3a2616;
+  --ok: #54b054;
+  --ok-soft: #14301a;
+  --code-bg: #202020;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface2: var(--surface-2);
+  --color-line: var(--line);
+  --color-lineStrong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-subtle: var(--subtle);
+  --color-faint: var(--faint);
+  --color-brand: var(--brand);
+  --color-brandHover: var(--brand-hover);
+  --color-brandSoft: var(--brand-soft);
+  --color-onBrand: var(--on-brand);
+  --color-danger: var(--danger);
+  --color-dangerSoft: var(--danger-soft);
+  --color-warn: var(--warn);
+  --color-warnSoft: var(--warn-soft);
+  --color-ok: var(--ok);
+  --color-okSoft: var(--ok-soft);
+  --color-code: var(--code-bg);
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Roboto, Arial, sans-serif;
+  --font-mono: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+html {
+  background: var(--bg);
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 20px;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--brand) 30%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+@keyframes indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}

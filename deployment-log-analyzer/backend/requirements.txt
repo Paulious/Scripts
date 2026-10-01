@@ -1,0 +1,9 @@
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30
+python-multipart>=0.0.12
+pydantic>=2.8,<3
+pydantic-settings>=2.4
+anthropic>=1,<2
+openai>=1.50
+# Optional: Entra ID (keyless) auth for Azure OpenAI
+azure-identity>=1.17

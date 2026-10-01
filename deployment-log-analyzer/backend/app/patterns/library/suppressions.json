@@ -1,0 +1,54 @@
+{
+  "suppressions": [
+    {
+      "id": "msi-internal-notes",
+      "regex": "Note: 1: 22(?:05|28|62|27)\\b",
+      "reason": "Windows Installer 'Note: 2205/2228/2262/2727' lines are internal queries for optional database tables. They appear in almost every healthy MSI log and are not errors."
+    },
+    {
+      "id": "wix-continue-marked",
+      "regex": "translated to success due to continue marking",
+      "reason": "A WiX custom action marked 'continue' reported an error that the installer deliberately ignored."
+    },
+    {
+      "id": "wix-helper-warnings",
+      "regex": "\\bWix\\w+:\\s+(?:Error 0x|ERROR:)",
+      "reason": "WiX helper clean-up steps (stopping a process that is not running, removing a folder that is not there). They only matter if the same action later fails fatally."
+    },
+    {
+      "id": "msi-skipped-action",
+      "regex": "Skipping action: \\w+ \\(condition is false\\)",
+      "reason": "The installer skipped an action because its condition was false. That is normal and includes error-sounding names such as NewerVersionError."
+    },
+    {
+      "id": "msi-srp-check",
+      "regex": "SOFTWARE RESTRICTION POLICY: Verifying package",
+      "reason": "Windows Installer routinely checks each package against software restriction policy. This line is the check running, not a block."
+    },
+    {
+      "id": "msi-appcompat",
+      "regex": "APPCOMPAT: \\[DetectVersionLaunchCondition\\]",
+      "reason": "Application-compatibility probe that fails to initialise on most installs. Harmless."
+    },
+    {
+      "id": "msi-property-dump",
+      "regex": "Property\\((?:S|C|N)\\): ",
+      "reason": "Windows Installer property dump. Values such as ErrorDialog=SetupError are just configuration."
+    },
+    {
+      "id": "pmpc-process-enum",
+      "regex": "getting the main module name for process",
+      "reason": "ScriptRunner enumerating running processes cannot read protected system processes (csrss, System). Expected for SYSTEM and harmless."
+    },
+    {
+      "id": "config-echo",
+      "regex": "^\\s*(?:TimeOut\\w*|UserNotificationTimeOut|DeferCount|DeferUntil|DeferPolicy\\w*|NotificationPolicy|FocusAssistPolicy|BlockingProcessPolicy|DisableSelfUpdaters|PreventConflictingProcessRestart|DeleteShortcut|UninstallPackage|UpdatePackage|InstallPackage)\\s*=",
+      "reason": "Configuration values echoed at start-up. Settings, not events."
+    },
+    {
+      "id": "no-errors-text",
+      "regex": "\\b(?:0|no|zero) (?:errors?|failures?)\\b",
+      "reason": "Text reporting that there were no errors."
+    }
+  ]
+}
