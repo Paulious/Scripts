@@ -31,6 +31,23 @@ async def health() -> dict:
     return {"status": "ok", "patterns": len(lib.patterns), "suppressions": len(lib.suppressions)}
 
 
+@router.get("/selftest")
+async def selftest(kb: int = 900, chunk_kb: int = 4, seconds: float = 0):
+    """Sends kb KB of filler in chunk_kb pieces, optionally spread over some seconds. Open it in the browser
+    to check that a reply of that size gets through the whole hosting path. Carries no data."""
+    kb, chunk_kb, seconds = max(1, min(kb, 20000)), max(1, min(chunk_kb, 1024)), max(0.0, min(seconds, 120.0))
+    pieces = max(1, kb // chunk_kb)
+
+    async def gen() -> AsyncIterator[bytes]:
+        for i in range(pieces):
+            yield (json.dumps({"n": i, "pad": "x" * (chunk_kb * 1024 - 40)}) + "\n").encode()
+            if seconds:
+                await asyncio.sleep(seconds / pieces)
+        yield (json.dumps({"done": True, "kb": kb, "chunk_kb": chunk_kb}) + "\n").encode()
+
+    return StreamingResponse(gen(), media_type="text/plain", headers={"Cache-Control": "no-store"})
+
+
 @router.get("/config")
 async def config() -> dict:
     """Everything the UI needs to know. No secrets, only which providers exist."""
