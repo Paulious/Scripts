@@ -336,3 +336,16 @@ async def test_llm_prompt_includes_latest_attempt_and_skips_repeats(settings):
         pl.build_provider = orig
     user = provider.calls[0][1]
     assert "first attempt" in user and "latest attempt" in user and "same region as an earlier block" in user
+
+
+@pytest.mark.asyncio
+async def test_multiline_commands_stay_inside_their_code_block(settings):
+    reply = json.loads(json.dumps(LLM_REPLY))
+    reply["remediation"] = [{"action": "Check", "detail": "d", "command": "Get-A\nGet-B | Select X"}]
+    md = (await _run(settings, FakeProvider([reply])))[-1]["data"]["report_markdown"]
+    assert "   ```powershell\n   Get-A\n   Get-B | Select X\n   ```" in md
+
+
+def test_prompt_tells_the_model_to_compare_attempts():
+    from app.llm.prompts import SYSTEM_PROMPT
+    assert "compare them" in SYSTEM_PROMPT and "wrong version" in SYSTEM_PROMPT

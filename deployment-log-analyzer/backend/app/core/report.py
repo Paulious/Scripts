@@ -83,7 +83,8 @@ def build_report(r: AnalysisResult) -> str:
                 line += f" - {step.detail}"
             md.append(line)
             if step.command:
-                md += ["", "   ```powershell", f"   {step.command}", "   ```", ""]
+                body = [f"   {ln}" for ln in step.command.splitlines()]
+                md += ["", "   ```powershell", *body, "   ```", ""]
     if a.verification:
         md += ["", "## How to confirm it is fixed", ""] + [f"- {v}" for v in a.verification]
 

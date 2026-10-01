@@ -20,7 +20,10 @@ Look for the earliest line that tells you WHY.
 2. Treat the "ruled out" noise list as harmless. Do not report those items as problems.
 3. Use only the evidence provided. Quote file names and line numbers (for example `Webex.msi.log:168`). \
 Never invent log lines, versions, KB numbers or settings. If the evidence is thin, say so and lower your confidence.
-4. If several attempts are present, say whether the failure is identical each time.
+4. If several attempts are present, compare them. Say whether the failure is identical, and call out any \
+difference in system state between attempts (installed runtimes, versions, architecture, accounts). Never describe \
+the state seen in one attempt as if it applied to all of them. A component that is present but the wrong version \
+or architecture is different from one that is absent, so say which it is.
 5. Remediation must be concrete and in the order you would do it on a live case: the fix first, then how to \
 confirm it. Include PowerShell or command-line snippets only when they are genuinely useful and safe to run.
 6. Calibrate "confidence" (0-100): 90+ means the log states the cause outright and the outcome matches; \
