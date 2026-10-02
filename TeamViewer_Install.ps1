@@ -30,7 +30,7 @@ switch ($ComputerName.Substring(0, 2)) {
     "LT" { $customconfigid = '6k647mj'; $assignmentid="0001CoABChBsworQkv8R8Ipq6WBm0kNFEigIACAAAgAJACKpKkBOb6AdkOuTL2e_jdVJHwMEvbZS2Xu0BoKgSOapGkBvr7Umk1jO2Wjr1ZuYZkFjFYARh0sTUV-weMy6cgWOpcZ9as5Wi_ESPgYjw75QdEb1o4MjI2Z9CyRW9pDXH_NlIAEQwpn9-gY=" ; break }
     "PL" { $customconfigid = '6rppngr'; $assignmentid="0001CoABChCGWPzgkv8R8L_lIHKNz1jBEigIACAAAgAJAHn7MUZwsr6WLerbB196JsGEtu2rd7qUjtTUMlXmrEgYGkArfMt7tVsv_kjvNB0MzvlJ069UwbF2i7KGXiuKRqgyZVBeA4aVYTpRjHDA1zU0iiVC6F7AGq0LvALYnnE2XRi8IAEQ44zR1gw=" ; break }
     "SI" { $customconfigid = '6psuvsv'; $assignmentid="0001CoABChA7Hi9gCBcR8YxSSdYwhiiHEigIACAAAgAJAA1N2lID15qHyB1OUbcRBPEOLu1lNgBAXjteyj-syloUGkBE_Xdto9WMBQrvcruR3FKjNbXUQrQcK1QPAw4uF7Rq0XZtXRxKLXP7PrV-pkOZhAiG6JMphNAT4moI38_-mVaXIAEQ75iNkQI=" ; break }
-    "NI" { $customconfigid = '6bwwsh9'; $assignmentid="0001CoABChDx1NDQkv4R8Ltkv5j4XbtHEigIACAAAgAJAJF5gybxoB9YswDcKC3z3t5HAZd9KGNe2I8WTz791p1LGkAID_zu1o4YW-u2tXzKLkO7SQzOM8n68gfIHZV5KU4vHUjSnq-LSdj20Iv9o2qMSPB7O9m1fbQa2DP-oKqZy8KGIAEQ5tHmlwM=" ; break }
+    "NI" { $customconfigid = '6bwwsh9'; $assignmentid="0001CoABChAoj7pgvl0R8apknA8wW4rqEigIACAAAgAJAH-aPnevUrKS34PUzPf42I70YVgw0L6AyJCuJd8OcKNBGkBNmpVhMYCRq2g6E4erFaZPZ5-f7TLSTAdP_LO3n7vdk5dG5--nWkqQeMDQ3T6NV4qMGS9HFAu26XnDAwYDJAYdIAEQj5CV8AY=" ; break }
     default { Write-Host "Failed to find a custom config ID" ; exit 1}
 }
 # Switch to identify devices DEIG-DUES for HQ devices (only if the name is long enough to check)
