@@ -8,18 +8,16 @@ Autopilot Monitor is a good fit for your goals. But it is **not built to be self
 
 I built everything I could to make that job repeatable. What is verified and what is not is listed at the bottom of this page.
 
-## My recommendation (challenging your assumption)
+## Decision: self-host (confirmed by you)
 
-You asked for a self-hosted environment at the lowest cost. Those two goals pull against each other, and goals 2 to 6 do not need self-hosting at all.
+You work for a managed service provider (MSP) and cannot use the hosted evaluation, so self-hosting in your own Azure subscription is the only route. That settles the question I raised earlier. The hosted free plan stays off the table, and the hosted trial is removed from the plan below.
 
-| Option | What it costs | Time | Covers goals |
-|---|---|---|---|
-| **A. Use the hosted free Community plan first** | £0 | about half a day | 2, 3, 4, 5, 6 (MCP is hosted too) |
-| **B. Self-host in your own Azure (this pack)** | about £10 to £25 a month, plus code signing £8 to £35 a month | 5 to 8 days (see plan below) | 1 to 7 |
+What this means in practice:
 
-**Do A first, in parallel.** It proves your Intune side (groups, scripts, ESP, Device Prep) works, and it teaches you the product, so that when you self-host you are debugging *your deployment* and not Intune at the same time. The hosted plan has caveats (the docs say availability is not guaranteed and data may be cleared between major updates), which is fine for a test tenant.
-
-Self-hosting is worth it only if you need one of: telemetry staying in your own Azure subscription, the ability to change the code, or the learning exercise itself. If it is the learning exercise, go ahead. Just know what you are signing up for.
+- **Use only your own test tenant (clefsoft.co.uk) and test devices.** Do not enrol customer devices or customer tenants into this lab. It is a lab, not a service.
+- **Check your employer's policy on forks and AI tools.** The MCP/Claude part sends enrollment data (device names, serials, software lists) to your AI vendor. With lab data only, that is usually fine. Confirm it, or skip Part 1 of doc 06 until you have.
+- **Licence (G17).** Backend, web and MCP are AGPL-3.0. A private lab is fine. If you later offer it to customers over the network, you must publish your modified source. Get your employer's legal view first.
+- **Cost.** About £5 to £15 a month for Azure in the lab, plus code signing (£8 to £35 a month). Details in doc 03.
 
 ## Gap register: things the repo does not tell you
 
@@ -50,7 +48,6 @@ Each gap has the evidence (file in the repo) and what I did about it.
 
 | Phase | Work | Effort | Depends on |
 |---|---|---|---|
-| 0. Hosted trial (optional but advised) | Sign in at autopilotmonitor.com with a clefsoft.co.uk admin, enable validation, deploy script to a test group | 0.5 day | Intune and Autopilot already enrolled |
 | 1. Decide and prepare | Confirm Flex in UK South; choose signing route; create GitHub fork; confirm licences | 0.5 day | none |
 | 2. Landing zone | RG, Bicep pass 1, deployer RBAC | 0.5 day | Azure Owner or (Contributor + User Access Admin) |
 | 3. Identity | Entra app, consent, secrets, seed rows | 0.5 day | Global Admin or Privileged Role Admin |
@@ -68,7 +65,7 @@ M1 landing zone deployed and `07-Test-Deployment.ps1` API gate passes. M2 first 
 
 ## Open questions I would ask before starting
 
-1. Is the goal to **learn self-hosting**, or to **evaluate the product**? (If the second, do the hosted trial and stop there.)
+1. Does your employer's policy allow a personal fork of an AGPL project and sending lab telemetry to an AI vendor (for the MCP test)?
 2. Which signing route: purchased OV code-signing certificate, **Azure Artifact Signing** (needs a pipeline change; upstream uses AzureSignTool with Key Vault), or lab-only self-signed trusted on your test VMs?
 3. Is `clefsoft.co.uk` an Entra tenant where you hold Global Administrator? Do you have Entra ID P1 (dynamic groups)?
 4. Do you own a custom domain for the portal and MCP (vanity URLs, managed certificates), or are default `*.azurestaticapps.net` URLs fine?

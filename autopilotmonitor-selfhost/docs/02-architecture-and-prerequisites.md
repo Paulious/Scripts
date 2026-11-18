@@ -154,7 +154,6 @@ Admin consent: needs **Global Administrator or Privileged Role Administrator** (
 - [ ] `az functionapp list-flexconsumption-locations` shows `uksouth` (G14)
 - [ ] Naming suffix chosen if `stautopilotmonitorprod` is taken
 - [ ] Hardware for tests decided (Hyper-V Gen2 VMs recommended)
-- [ ] Hosted trial done or consciously skipped
 
 **Network**
 - [ ] No TLS inspection between test devices and the API host

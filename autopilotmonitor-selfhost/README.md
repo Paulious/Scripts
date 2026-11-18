@@ -8,7 +8,7 @@ A delivery pack for deploying and evaluating [okieselbach/AutopilotMonitor](http
 
 | Path | What | Verified how |
 |---|---|---|
-| `docs/01-executive-summary-and-gaps.md` | Summary, recommendation, **gap register G1 to G18**, delivery plan, open questions, verified/unverified table | n/a |
+| `docs/01-executive-summary-and-gaps.md` | Summary, decision, **gap register G1 to G18**, delivery plan, open questions, verified/unverified table | n/a |
 | `docs/02-architecture-and-prerequisites.md` | Architecture diagram, Azure services, exact Entra app settings, Intune needs, RBAC, licensing, prerequisites checklist | read from source |
 | `docs/03-cost-and-security.md` | Cost for lab / small / medium, security review with ranked findings, Conditional Access | cost = my estimate |
 | `docs/04-deployment-guide.md` | Naming standard, **step-by-step walkthrough (steps 0 to 15)**, manual option, azd, permissions summary | commands not run against your tenant |
@@ -23,7 +23,7 @@ A delivery pack for deploying and evaluating [okieselbach/AutopilotMonitor](http
 
 ## Order of work
 
-1. Hosted trial (optional, half a day). 2. Landing zone (`bicep`, pass 1). 3. Entra app + secrets. 4. Pass 2 (client id + MCP). 5. Fork + patch + tests. 6. Code-signing. 7. Publish agent/scripts/MSI. 8. Deploy backend + web. 9. Seed + reseed rules. 10. Intune groups/script/MSI. 11. Test plan. 12. Lock down.
+1. Landing zone (`bicep`, pass 1). 2. Entra app + secrets. 3. Pass 2 (client id + MCP). 4. Fork + patch + tests. 5. Code-signing. 6. Publish agent/scripts/MSI. 7. Deploy backend + web. 8. Seed + reseed rules. 9. Intune groups/script/MSI. 10. Test plan. 11. Lock down.
 
 Details and every command are in `docs/04`.
 
