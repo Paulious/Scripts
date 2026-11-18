@@ -20,7 +20,7 @@ param mcpPublicUrl = ''           // <- final re-run
 param rulesBaseUrl = 'https://raw.githubusercontent.com/<your-github-user>/AutopilotMonitor/<commit-sha>/rules'
 
 // Custom domains, once Cloudflare DNS + hostnames exist (docs/04 part 2b). Example:
-param extraPortalOrigins = []      // ['https://autopilot.clefsoft.co.uk']
+param extraPortalOrigins = []      // ['https://monitor.clefsoft.co.uk']
 
 param clientCertMode = 'Optional'  // test OptionalInteractiveUser too, see docs/02 gap G6
 param functionMaxInstances = 10

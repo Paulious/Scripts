@@ -50,7 +50,7 @@ param logDailyCapGb int = 1
 @description('Object id of the person running the deployment scripts. Gets TEMPORARY data-plane roles (see docs/03). Remove afterwards.')
 param deployerObjectId string = ''
 
-@description('Custom portal origins (e.g. https://autopilot.clefsoft.co.uk) added to Function CORS and SignalR CORS next to the default SWA host.')
+@description('Custom portal origins (e.g. https://monitor.clefsoft.co.uk) added to Function CORS and SignalR CORS next to the default SWA host.')
 param extraPortalOrigins array = []
 
 @description('Monthly budget in your billing currency. 0 disables the budget.')

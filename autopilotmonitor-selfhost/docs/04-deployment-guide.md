@@ -26,7 +26,7 @@ Region: **UK South** (`uksouth`, code `uks`). Exceptions: Static Web App managem
 | Tags | `workload`, `environment`, `managedBy`, `purpose` | applied by Bicep |
 
 **Default hostnames** (no custom domain in the lab): `https://<function>.azurewebsites.net` (newer apps may get a hashed host; always use the Bicep output), `https://<swa>.azurestaticapps.net`, `https://<app>.<env>.uksouth.azurecontainerapps.io`.
-**Custom domains (Cloudflare, see step 5b):** `autopilot.clefsoft.co.uk` (portal), `api-autopilot.clefsoft.co.uk` (API), `mcp-autopilot.clefsoft.co.uk` (MCP). Decide before step 6. Changing a host later means re-running the patcher and **rebuilding and re-signing the agent**, so decide early if you want vanity URLs. Also note: a custom domain does **not** make existing agents move; the baked URL is what they use.
+**Custom domains (Cloudflare, see step 5b):** `monitor.clefsoft.co.uk` (portal), `monitor-api.clefsoft.co.uk` (API), `monitor-mcp.clefsoft.co.uk` (MCP). Decide before step 6. Changing a host later means re-running the patcher and **rebuilding and re-signing the agent**, so decide early if you want vanity URLs. Also note: a custom domain does **not** make existing agents move; the baked URL is what they use.
 
 ## Part 2. Walkthrough (Option B: IaC + scripts, recommended)
 
@@ -98,16 +98,16 @@ cd ../scripts
 
 ### Step 5b. Custom domains with Cloudflare (optional, but decide **now**, before step 6)
 
-Hostnames are compiled into the agent. If you want `download.clefsoft.co.uk` style URLs, set them up **before** patching and signing, or you will rebuild everything later.
+Hostnames are compiled into the agent. If you want `monitor-dl.clefsoft.co.uk` style URLs, set them up **before** patching and signing, or you will rebuild everything later.
 
 **What Cloudflare is used for, and what it is not** (reasons in the chat summary and gap G6/G13):
 
 | Host | Record | Cloudflare proxy | Notes |
 |---|---|---|---|
-| `autopilot.clefsoft.co.uk` (portal) | CNAME to the SWA default host | **DNS only** (grey cloud) | SWA issues its own free certificate; it validates the CNAME directly. |
-| `api-autopilot.clefsoft.co.uk` (API) | CNAME to the Function default host | **DNS only, always** | Devices authenticate with the Intune client certificate. A Cloudflare proxy terminates TLS and would break it. |
-| `download.clefsoft.co.uk` | Worker custom domain (`cloudflare/download-worker.mjs`) | Proxied (the Worker) | Replaces the Front Door alias (saves about £30 a month). |
-| `go.clefsoft.co.uk` (optional) | dummy `AAAA 100::` record + a Redirect Rule | Proxied | Redirect `go.clefsoft.co.uk/*` to `https://api-autopilot.clefsoft.co.uk/api/bootstrap/go/${1}`. Only needed for Bootstrap Sessions. |
+| `monitor.clefsoft.co.uk` (portal) | CNAME to the SWA default host | **DNS only** (grey cloud) | SWA issues its own free certificate; it validates the CNAME directly. |
+| `monitor-api.clefsoft.co.uk` (API) | CNAME to the Function default host | **DNS only, always** | Devices authenticate with the Intune client certificate. A Cloudflare proxy terminates TLS and would break it. |
+| `monitor-dl.clefsoft.co.uk` | Worker custom domain (`cloudflare/download-worker.mjs`) | Proxied (the Worker) | Replaces the Front Door alias (saves about £30 a month). |
+| `monitor-go.clefsoft.co.uk` (optional) | dummy `AAAA 100::` record + a Redirect Rule | Proxied | Redirect `monitor-go.clefsoft.co.uk/*` to `https://monitor-api.clefsoft.co.uk/api/bootstrap/go/${1}`. Only needed for Bootstrap Sessions. |
 | MCP | keep the Container Apps default URL for the lab | n/a | Bicep derives `MCP_PUBLIC_URL` from the default domain. A custom MCP domain needs a Bicep change. Do it later. |
 
 **Before you move the zone, read this.** If `clefsoft.co.uk` carries Microsoft 365 mail or Intune enrollment, changing its nameservers to Cloudflare moves *every* record. Export the zone first and recreate every Microsoft record as **DNS only**: `MX`, `autodiscover`, `enterpriseenrollment`, `enterpriseregistration`, DKIM `selector1/selector2._domainkey` CNAMEs, `SPF` and `_dmarc` TXT, and any `msoid`/`lyncdiscover` entries. If that is too risky for a tenant you also use for mail, register a separate domain for the lab instead.
@@ -115,14 +115,14 @@ Hostnames are compiled into the agent. If you want `download.clefsoft.co.uk` sty
 **Do:**
 ```powershell
 # 1. Portal (SWA)
-az staticwebapp hostname set --name $o.staticWebAppName.value --resource-group $rg --hostname autopilot.clefsoft.co.uk
-#    (Cloudflare: CNAME  autopilot -> <swa default host>, DNS only. If Azure asks for a TXT instead, add what it shows.)
+az staticwebapp hostname set --name $o.staticWebAppName.value --resource-group $rg --hostname monitor.clefsoft.co.uk
+#    (Cloudflare: CNAME  monitor -> <swa default host>, DNS only. If Azure asks for a TXT instead, add what it shows.)
 
 # 2. API (Function app): ownership TXT, CNAME, hostname, managed certificate
 $vid = az functionapp show -g $rg -n $o.functionAppName.value --query customDomainVerificationId -o tsv
-#    Cloudflare: TXT  asuid.api-autopilot = $vid        and     CNAME  api-autopilot -> <function default host>   (both DNS only)
-az functionapp config hostname add -g $rg --webapp-name $o.functionAppName.value --hostname api-autopilot.clefsoft.co.uk
-az functionapp config ssl create   -g $rg -n $o.functionAppName.value --hostname api-autopilot.clefsoft.co.uk
+#    Cloudflare: TXT  asuid.monitor-api = $vid        and     CNAME  monitor-api -> <function default host>   (both DNS only)
+az functionapp config hostname add -g $rg --webapp-name $o.functionAppName.value --hostname monitor-api.clefsoft.co.uk
+az functionapp config ssl create   -g $rg -n $o.functionAppName.value --hostname monitor-api.clefsoft.co.uk
 #    then bind it: az functionapp config ssl bind ... --ssl-type SNI   (or Portal: Function app > Custom domains)
 ```
 Microsoft's docs list managed certificates as supported on Flex Consumption, but **I have not verified these CLI commands on Flex**; the portal path (*Function app > Custom domains > Add*) is the fallback. Check that the client-certificate setting survived: `az functionapp show -g $rg -n <func> --query "{c:clientCertEnabled,m:clientCertMode}"`.
@@ -130,16 +130,16 @@ Microsoft's docs list managed certificates as supported on Flex Consumption, but
 ```powershell
 # 3. Download Worker
 cd <repo>/deploy/selfhost/cloudflare
-#    edit wrangler.jsonc: BLOB_ORIGIN = https://<your data storage account>.blob.core.windows.net ; route = download.clefsoft.co.uk
+#    edit wrangler.jsonc: BLOB_ORIGIN = https://<your data storage account>.blob.core.windows.net ; route = monitor-dl.clefsoft.co.uk
 npx wrangler login ; npx wrangler deploy
-curl.exe -I https://download.clefsoft.co.uk/agent/version.json        # expect 404 until step 9 publishes it; 404 (not 5xx/1xxx) proves the Worker is routing
+curl.exe -I https://monitor-dl.clefsoft.co.uk/agent/version.json        # expect 404 until step 9 publishes it; 404 (not 5xx/1xxx) proves the Worker is routing
 ```
 In Cloudflare for the **download host**: turn **off** Bot Fight Mode, Browser Integrity Check and any managed challenge (Security > Settings, or a Skip rule for that hostname). A PowerShell download that gets a challenge page instead of a ZIP fails in the loader with a hash error.
 
 **Then carry the domains through the rest of the guide:**
-1. `main.bicepparam`: `extraPortalOrigins = ['https://autopilot.clefsoft.co.uk']`, re-deploy (adds the origin to Function and SignalR CORS).
-2. Re-run `02-New-EntraAppRegistration.ps1 -PortalUrl https://autopilot.clefsoft.co.uk ...` (redirect URIs move to the custom origin).
-3. In `selfhost.config.json` use the custom values: `apiBaseUrl`, `portalUrl`, `downloadBaseUrl = https://download.clefsoft.co.uk/agent`, optional `bootstrapGoBaseUrl`.
+1. `main.bicepparam`: `extraPortalOrigins = ['https://monitor.clefsoft.co.uk']`, re-deploy (adds the origin to Function and SignalR CORS).
+2. Re-run `02-New-EntraAppRegistration.ps1 -PortalUrl https://monitor.clefsoft.co.uk ...` (redirect URIs move to the custom origin).
+3. In `selfhost.config.json` use the custom values: `apiBaseUrl`, `portalUrl`, `downloadBaseUrl = https://monitor-dl.clefsoft.co.uk/agent`, optional `bootstrapGoBaseUrl`.
 4. GitHub variables `API_BASE_URL` and `PORTAL_URL` use the custom hosts.
 5. Cost of all of this: Cloudflare Free plan and the Workers free tier cover a lab (about £0).
 
@@ -225,7 +225,7 @@ Run the upstream workflows in your fork (they read hosts from the patched `Get-E
 
 Two upstream details you will hit: (a) the workflows also try to mirror to a *legacy* storage account if `AZURE_BLOB_AGENT_LEGACY_SAS_TOKEN` is set. Leave that secret **unset**; the mirror is fail-soft. (b) The pipeline's Azure identity needs **Storage Blob Data Contributor** on the data account **and Storage Table Data Contributor** (it merges the AdminConfiguration row). Grant both to the OIDC identity from step 7.
 
-Verify: `07-Test-Deployment.ps1` (agent blob checks should now pass; add `-AgentContainerUrl https://download.clefsoft.co.uk/agent` if you use the Worker). The signature check on a trusted VM is step 8 item 6.
+Verify: `07-Test-Deployment.ps1` (agent blob checks should now pass; add `-AgentContainerUrl https://monitor-dl.clefsoft.co.uk/agent` if you use the Worker). The signature check on a trusted VM is step 8 item 6.
 
 ### Step 10. Deploy backend and web
 GitHub > Actions > **Deploy backend** > Run; then **Deploy web** > Run. The backend workflow waits until `/api/health` reports the new commit.
