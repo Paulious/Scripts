@@ -19,6 +19,8 @@ A delivery pack for deploying and evaluating [okieselbach/AutopilotMonitor](http
 | `scripts/01-set-selfhost-endpoints.mjs` | Patches a fork to your hosts and signing identity | **Run on a real clone** |
 | `scripts/03-seed-platform.mjs` | Seeds first Global Admin, identity binding, auto-approve | **Run against Azurite** |
 | `scripts/02, 04, 05, 06, 07 *.ps1` | Entra app, secrets, Intune groups, Intune script, health checks | **Not executed** (no PowerShell in the authoring sandbox). Use `-WhatIf`. |
+| `scripts/08-New-LabSigningCert.ps1`, `09-Trust-LabCert.ps1` | Self-signed lab signing cert into Key Vault; trust it on test VMs | **Not executed** (Windows-only cmdlets) |
+| `cloudflare/download-worker.mjs` + `wrangler.jsonc` | Cloudflare Worker serving the agent download host | **Unit-tested with a stubbed fetch**; not deployed |
 | `ci/*.yml` | GitHub Actions: infra, backend, web | YAML syntax only |
 
 ## Order of work

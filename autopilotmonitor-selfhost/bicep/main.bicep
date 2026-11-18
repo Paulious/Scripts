@@ -50,6 +50,9 @@ param logDailyCapGb int = 1
 @description('Object id of the person running the deployment scripts. Gets TEMPORARY data-plane roles (see docs/03). Remove afterwards.')
 param deployerObjectId string = ''
 
+@description('Custom portal origins (e.g. https://autopilot.clefsoft.co.uk) added to Function CORS and SignalR CORS next to the default SWA host.')
+param extraPortalOrigins array = []
+
 @description('Monthly budget in your billing currency. 0 disables the budget.')
 param monthlyBudget int = 0
 param budgetAlertEmail string = ''
@@ -70,6 +73,7 @@ var nAppi = 'appi-${workload}-${env}-${locCode}'
 var nDataStorage = take('st${workload}${env}${sfx}', 24) // stautopilotmonitorprod
 var nHostStorage = take('st${workload}fn${env}${sfx}', 24) // stautopilotmonitorfnprod
 var nKv = take('kv-${workload}-${env}${dashSfx}', 24) // kv-autopilotmonitor-prod (24 chars: no room for a suffix)
+var nKvSign = take('kv-${workload}-sign${dashSfx}', 24) // kv-autopilotmonitor-sign: code-signing certificate ONLY
 var nSignalR = 'sigr-${workload}-${env}${dashSfx}'
 var nPlan = 'asp-${workload}-${env}-${locCode}'
 var nFunc = 'func-${workload}-${env}${dashSfx}'
@@ -113,6 +117,17 @@ module keyvault 'modules/keyvault.bicep' = {
   }
 }
 
+// Separate vault for the code-signing certificate: whoever can sign can ship code to every enrolling device.
+module keyvaultSign 'modules/keyvault.bicep' = {
+  name: 'keyvault-sign'
+  params: {
+    location: location
+    name: nKvSign
+    workspaceId: monitoring.outputs.workspaceId
+    tags: tags
+  }
+}
+
 module swa 'modules/swa.bicep' = {
   name: 'swa'
   params: {
@@ -123,7 +138,7 @@ module swa 'modules/swa.bicep' = {
 }
 
 var portalOrigin = 'https://${swa.outputs.defaultHostName}'
-var corsOrigins = [portalOrigin]
+var corsOrigins = concat([portalOrigin], extraPortalOrigins)
 
 module signalr 'modules/signalr.bicep' = {
   name: 'signalr'
@@ -211,6 +226,18 @@ resource deployerKv 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!
   dependsOn: [keyvault]
 }
 
+resource kvSignRef 'Microsoft.KeyVault/vaults@2023-07-01' existing = { name: nKvSign }
+resource deployerKvSign 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(deployerObjectId)) {
+  name: guid(kvSignRef.id, deployerObjectId, 'a4417e6f-fecd-4de8-b567-7b0420556985')
+  scope: kvSignRef
+  properties: {
+    principalId: deployerObjectId
+    principalType: 'User'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'a4417e6f-fecd-4de8-b567-7b0420556985') // Key Vault Certificates Officer (import the signing cert)
+  }
+  dependsOn: [keyvaultSign]
+}
+
 module budget 'modules/budget.bicep' = if (monthlyBudget > 0 && !empty(budgetAlertEmail)) {
   name: 'budget'
   params: {
@@ -228,6 +255,8 @@ output apiBaseUrl string = 'https://${func.outputs.defaultHostName}'
 output portalUrl string = portalOrigin
 output staticWebAppName string = swa.outputs.name
 output keyVaultName string = keyvault.outputs.name
+output signingKeyVaultName string = keyvaultSign.outputs.name
+output signingKeyVaultUri string = keyvaultSign.outputs.uri
 output dataStorageName string = storage.outputs.dataStorageName
 output dataBlobEndpoint string = storage.outputs.dataBlobEndpoint
 output agentContainerUrl string = '${storage.outputs.dataBlobEndpoint}agent'

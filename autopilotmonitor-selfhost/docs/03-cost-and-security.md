@@ -25,6 +25,7 @@
 | Static Web App | 0 (Free) | 0 to 7 | 7 | Standard only if you need SLA or more custom domains. |
 | ACR Basic (MCP image) | 3 to 4 | 3 to 4 | 15 (Standard) | Premium (private link) is ~£37. |
 | Container App (MCP) | 0 to 1 | 1 to 3 | 25 to 40 (min 1 replica) | Scale-to-zero: first request pays about 25 s cold start (upstream measured). |
+| Cloudflare (DNS + download Worker) | 0 (Free plan, Workers free tier) | 0 | 0 to 20 | Replaces Front Door in the lab. Does **not** front the API (client-cert auth). |
 | Front Door | not used | not used | 30 to 40 (Standard) | Needed only for `go.`-style short links and real client IPs. |
 | Private endpoints / VNet | not used | not used | 25 to 60 | Storage ×3 services, Key Vault. |
 | Defender for Cloud plans | not used | optional 5 to 10 | 10 to 30 | Storage and Key Vault plans. |
@@ -33,8 +34,8 @@
 ### Costs outside Azure that people forget
 | Item | Estimate | Notes |
 |---|---|---|
-| **Code-signing certificate** (required, G3) | **£8 to £35 a month** | OV certificate ~£150 to £400 a year, **or** Azure Artifact Signing ~US$10 a month (Basic). **Artifact Signing needs a pipeline change**: upstream signs with AzureSignTool against a Key Vault certificate. Availability for UK organisations and identity-validation lead time: verify. |
-| Signing Key Vault (if AzureSignTool) | under £1 | Keep separate from the platform vault. |
+| **Code-signing certificate** (required, G3) | **£0 for the self-signed lab route** (chosen). £8 to £35 a month for a trusted certificate later | OV certificate ~£150 to £400 a year, **or** Azure Artifact Signing ~US$10 a month (Basic). **Artifact Signing needs a pipeline change**: upstream signs with AzureSignTool against a Key Vault certificate. Availability for UK organisations and identity-validation lead time: verify. |
+| Signing Key Vault (separate, created by Bicep) | under £1 | Keep separate from the platform vault. |
 | GitHub Actions | £0 (public fork) | Private: Windows runner minutes count double. |
 | Microsoft 365 test licences | existing | Business Premium ≈ £16 per user per month if you need one. |
 | Your time | days | See delivery plan in doc 01. |

@@ -26,7 +26,7 @@ Region: **UK South** (`uksouth`, code `uks`). Exceptions: Static Web App managem
 | Tags | `workload`, `environment`, `managedBy`, `purpose` | applied by Bicep |
 
 **Default hostnames** (no custom domain in the lab): `https://<function>.azurewebsites.net` (newer apps may get a hashed host; always use the Bicep output), `https://<swa>.azurestaticapps.net`, `https://<app>.<env>.uksouth.azurecontainerapps.io`.
-**Custom domains (recommended once stable):** `autopilot.clefsoft.co.uk` (portal), `api-autopilot.clefsoft.co.uk` (API), `mcp-autopilot.clefsoft.co.uk` (MCP). Changing a host later means re-running the patcher and **rebuilding and re-signing the agent**, so decide early if you want vanity URLs. Also note: a custom domain does **not** make existing agents move; the baked URL is what they use.
+**Custom domains (Cloudflare, see step 5b):** `autopilot.clefsoft.co.uk` (portal), `api-autopilot.clefsoft.co.uk` (API), `mcp-autopilot.clefsoft.co.uk` (MCP). Decide before step 6. Changing a host later means re-running the patcher and **rebuilding and re-signing the agent**, so decide early if you want vanity URLs. Also note: a custom domain does **not** make existing agents move; the baked URL is what they use.
 
 ## Part 2. Walkthrough (Option B: IaC + scripts, recommended)
 
@@ -96,6 +96,53 @@ cd ../scripts
 ./02-New-EntraAppRegistration.ps1 -TenantId $tenantId -PortalUrl $portal -McpUrl $mcp -KeyVaultName $kv   # existing app: updates redirect URIs only
 ```
 
+### Step 5b. Custom domains with Cloudflare (optional, but decide **now**, before step 6)
+
+Hostnames are compiled into the agent. If you want `download.clefsoft.co.uk` style URLs, set them up **before** patching and signing, or you will rebuild everything later.
+
+**What Cloudflare is used for, and what it is not** (reasons in the chat summary and gap G6/G13):
+
+| Host | Record | Cloudflare proxy | Notes |
+|---|---|---|---|
+| `autopilot.clefsoft.co.uk` (portal) | CNAME to the SWA default host | **DNS only** (grey cloud) | SWA issues its own free certificate; it validates the CNAME directly. |
+| `api-autopilot.clefsoft.co.uk` (API) | CNAME to the Function default host | **DNS only, always** | Devices authenticate with the Intune client certificate. A Cloudflare proxy terminates TLS and would break it. |
+| `download.clefsoft.co.uk` | Worker custom domain (`cloudflare/download-worker.mjs`) | Proxied (the Worker) | Replaces the Front Door alias (saves about £30 a month). |
+| `go.clefsoft.co.uk` (optional) | dummy `AAAA 100::` record + a Redirect Rule | Proxied | Redirect `go.clefsoft.co.uk/*` to `https://api-autopilot.clefsoft.co.uk/api/bootstrap/go/${1}`. Only needed for Bootstrap Sessions. |
+| MCP | keep the Container Apps default URL for the lab | n/a | Bicep derives `MCP_PUBLIC_URL` from the default domain. A custom MCP domain needs a Bicep change. Do it later. |
+
+**Before you move the zone, read this.** If `clefsoft.co.uk` carries Microsoft 365 mail or Intune enrollment, changing its nameservers to Cloudflare moves *every* record. Export the zone first and recreate every Microsoft record as **DNS only**: `MX`, `autodiscover`, `enterpriseenrollment`, `enterpriseregistration`, DKIM `selector1/selector2._domainkey` CNAMEs, `SPF` and `_dmarc` TXT, and any `msoid`/`lyncdiscover` entries. If that is too risky for a tenant you also use for mail, register a separate domain for the lab instead.
+
+**Do:**
+```powershell
+# 1. Portal (SWA)
+az staticwebapp hostname set --name $o.staticWebAppName.value --resource-group $rg --hostname autopilot.clefsoft.co.uk
+#    (Cloudflare: CNAME  autopilot -> <swa default host>, DNS only. If Azure asks for a TXT instead, add what it shows.)
+
+# 2. API (Function app): ownership TXT, CNAME, hostname, managed certificate
+$vid = az functionapp show -g $rg -n $o.functionAppName.value --query customDomainVerificationId -o tsv
+#    Cloudflare: TXT  asuid.api-autopilot = $vid        and     CNAME  api-autopilot -> <function default host>   (both DNS only)
+az functionapp config hostname add -g $rg --webapp-name $o.functionAppName.value --hostname api-autopilot.clefsoft.co.uk
+az functionapp config ssl create   -g $rg -n $o.functionAppName.value --hostname api-autopilot.clefsoft.co.uk
+#    then bind it: az functionapp config ssl bind ... --ssl-type SNI   (or Portal: Function app > Custom domains)
+```
+Microsoft's docs list managed certificates as supported on Flex Consumption, but **I have not verified these CLI commands on Flex**; the portal path (*Function app > Custom domains > Add*) is the fallback. Check that the client-certificate setting survived: `az functionapp show -g $rg -n <func> --query "{c:clientCertEnabled,m:clientCertMode}"`.
+
+```powershell
+# 3. Download Worker
+cd <repo>/deploy/selfhost/cloudflare
+#    edit wrangler.jsonc: BLOB_ORIGIN = https://<your data storage account>.blob.core.windows.net ; route = download.clefsoft.co.uk
+npx wrangler login ; npx wrangler deploy
+curl.exe -I https://download.clefsoft.co.uk/agent/version.json        # expect 404 until step 9 publishes it; 404 (not 5xx/1xxx) proves the Worker is routing
+```
+In Cloudflare for the **download host**: turn **off** Bot Fight Mode, Browser Integrity Check and any managed challenge (Security > Settings, or a Skip rule for that hostname). A PowerShell download that gets a challenge page instead of a ZIP fails in the loader with a hash error.
+
+**Then carry the domains through the rest of the guide:**
+1. `main.bicepparam`: `extraPortalOrigins = ['https://autopilot.clefsoft.co.uk']`, re-deploy (adds the origin to Function and SignalR CORS).
+2. Re-run `02-New-EntraAppRegistration.ps1 -PortalUrl https://autopilot.clefsoft.co.uk ...` (redirect URIs move to the custom origin).
+3. In `selfhost.config.json` use the custom values: `apiBaseUrl`, `portalUrl`, `downloadBaseUrl = https://download.clefsoft.co.uk/agent`, optional `bootstrapGoBaseUrl`.
+4. GitHub variables `API_BASE_URL` and `PORTAL_URL` use the custom hosts.
+5. Cost of all of this: Cloudflare Free plan and the Workers free tier cover a lab (about £0).
+
 ### Step 6. Fork preparation (the rebuild part)
 ```powershell
 # Fork okieselbach/AutopilotMonitor on GitHub first. Then:
@@ -136,16 +183,39 @@ az staticwebapp secrets list --name $o.staticWebAppName.value --query properties
 **Tighten later:** Contributor on the RG is broad for a pipeline that only deploys code. Once infra is stable, replace it with *Website Contributor* on the Function app, plus data roles on the `agent` container for the agent pipeline.
 Copy `ci/*.yml` to `.github/workflows/`.
 
-### Step 8. Code-signing (gap G3, the long pole)
-You need a certificate whose chain a **fresh Windows device already trusts**, because the loader runs during OOBE before you can install anything. Choose one:
+### Step 8. Code-signing: self-signed lab certificate (chosen route)
 
-| Route | Works on real devices? | Effort | Notes |
-|---|---|---|---|
-| **Purchased OV code-signing certificate**, imported to a *dedicated* Key Vault | Yes | Identity validation can take days. 1 to 3 days elapsed. | Matches upstream's pipeline (AzureSignTool + Key Vault). Many CAs now require HSM-backed keys; check Key Vault Premium or Managed HSM needs with the CA. |
-| **Azure Artifact Signing** (formerly Trusted Signing) | Yes | You must change the signing steps in `build-agent.yml`, `build-msi.yml`, `Publish-BootstrapScripts.ps1` | Verify it is offered to UK organisations and what it costs today. **Not verified by me.** |
-| **Self-signed, lab only** | **Only on test VMs where you installed the certificate into LocalMachine\Root and TrustedPublisher before Autopilot** | Hours | Cheapest, zero lead time. Not production-like. Do not use on real hardware. |
+**Why this works, and its limit.** The loader, installer and agent pin the signer's *subject* (`*O=Clefsoft Lab*`) and demand Authenticode status **Valid**. Valid means the device trusts the chain. A self-signed certificate is trusted **only on machines where you installed it first**. So this works on your Hyper-V test VMs and **nowhere else**. Cloudflare cannot issue code-signing certificates, so it plays no part here.
 
-Repository **variables** the upstream agent workflow reads: `CODE_SIGN_CLIENT_ID`, `CODE_SIGN_CERTIFICATE_NAME`, `CODE_SIGN_KEY_VAULT_URL`, `CODE_SIGN_EXPECTED_SUBJECT` (must match `*O=<publisherOrg>*`). The workflow login identity needs permission to **sign** with the key (`Key Vault Crypto User`) and **read** the certificate (`Key Vault Certificate User` or secrets get).
+**What stays the same:** the upstream pipeline (AzureSignTool + Key Vault) is used **unchanged**. We only put a self-signed certificate in the Key Vault it reads from.
+
+1. **Find the signing vault** (Bicep created it separately from the platform vault): `$sign = $o.signingKeyVaultName.value` (`kv-autopilotmonitor-sign`).
+2. **Create and import the certificate** (on a Windows PC; `-WhatIf` first):
+   ```powershell
+   cd <repo>/deploy/selfhost/scripts
+   ./08-New-LabSigningCert.ps1 -SigningKeyVaultName $sign -Organisation 'Clefsoft Lab' -WhatIf
+   ./08-New-LabSigningCert.ps1 -SigningKeyVaultName $sign -Organisation 'Clefsoft Lab'
+   ```
+   It imports the private key into Key Vault, deletes it from your PC, and writes `lab-signing.cer` (public part only). It prints the four GitHub variables to set.
+3. **GitHub:** set variables `CODE_SIGN_KEY_VAULT_URL`, `CODE_SIGN_CERTIFICATE_NAME`, `CODE_SIGN_EXPECTED_SUBJECT = *O=Clefsoft Lab*`, `CODE_SIGN_CLIENT_ID`. Give the OIDC identity **Key Vault Crypto User** and **Key Vault Certificate User** on the **signing vault only**:
+   ```powershell
+   $signId = az keyvault show -n $sign --query id -o tsv
+   az role assignment create --assignee <oidc app id> --role "Key Vault Crypto User"        --scope $signId
+   az role assignment create --assignee <oidc app id> --role "Key Vault Certificate User"   --scope $signId
+   ```
+4. **Patcher:** `publisherOrg` must equal the certificate's `O=` value: `Clefsoft Lab`. (Re-run it if you set something else earlier; it is idempotent.)
+5. **Trust it on each test VM, before Autopilot** (`scripts/09-Trust-LabCert.ps1`, full instructions in its header):
+   at OOBE press **Shift+F10**, get `lab-signing.cer` onto the VM (small ISO or VHDX), then
+   `certutil -addstore -f Root <path>\lab-signing.cer` and `certutil -addstore -f TrustedPublisher <path>\lab-signing.cer`.
+   Then take a **Hyper-V checkpoint** at that point and restore it before every test run.
+6. **Prove it (after step 9):** on a trusted VM, `Get-AuthenticodeSignature .\Start-AutopilotMonitor.ps1` must say **Valid** with `O=Clefsoft Lab`. On a VM **without** the trust it should say **NotTrusted/UnknownError**, and the loader must refuse to run it. That second result is test T9 and shows the pin really protects you.
+
+**Rules for this route**
+- Lab VMs only. Never real or customer hardware: trusting this certificate means the machine trusts anything signed with the lab key.
+- The certificate lives 1 year. Calendar the expiry. After it, every signed file stops verifying.
+- Treat the signing vault as the crown jewel even in a lab: separate vault, no human sign access, pipeline identity only.
+
+**Moving to a real certificate later:** import the purchased certificate to the same vault under the same name, change `CODE_SIGN_EXPECTED_SUBJECT` and the patcher's `publisherOrg` to the new subject, re-patch, and re-publish agent, scripts and MSI. Alternatives if you want a publicly trusted certificate: a purchased OV certificate, or Azure Artifact Signing (needs pipeline changes; not verified by me).
 
 ### Step 9. Publish the agent, MSI and scripts
 Run the upstream workflows in your fork (they read hosts from the patched `Get-Endpoints.ps1`):
@@ -155,7 +225,7 @@ Run the upstream workflows in your fork (they read hosts from the patched `Get-E
 
 Two upstream details you will hit: (a) the workflows also try to mirror to a *legacy* storage account if `AZURE_BLOB_AGENT_LEGACY_SAS_TOKEN` is set. Leave that secret **unset**; the mirror is fail-soft. (b) The pipeline's Azure identity needs **Storage Blob Data Contributor** on the data account **and Storage Table Data Contributor** (it merges the AdminConfiguration row). Grant both to the OIDC identity from step 7.
 
-Verify: `07-Test-Deployment.ps1` (agent blob checks should now pass), and download the script, then `Get-AuthenticodeSignature .\Start-AutopilotMonitor.ps1` must say **Valid** and show your organisation.
+Verify: `07-Test-Deployment.ps1` (agent blob checks should now pass; add `-AgentContainerUrl https://download.clefsoft.co.uk/agent` if you use the Worker). The signature check on a trusted VM is step 8 item 6.
 
 ### Step 10. Deploy backend and web
 GitHub > Actions > **Deploy backend** > Run; then **Deploy web** > Run. The backend workflow waits until `/api/health` reports the new commit.

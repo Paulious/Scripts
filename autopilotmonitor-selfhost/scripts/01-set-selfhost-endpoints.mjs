@@ -12,7 +12,10 @@
  *   node 01-set-selfhost-endpoints.mjs --repo ../AutopilotMonitor --config selfhost.config.json --apply
  *
  * selfhost.config.json (see selfhost.config.example.json):
- *   apiBaseUrl, portalUrl, mcpUrl, dataStorageAccount, publisherOrg
+ *   apiBaseUrl, portalUrl, mcpUrl, dataStorageAccount, publisherOrg   (required)
+ *   downloadBaseUrl      optional, e.g. https://download.clefsoft.co.uk/agent (Cloudflare Worker in front of the blob).
+ *                        Default: <blob>/agent. This is the host the BOOTSTRAP SCRIPTS download from.
+ *   bootstrapGoBaseUrl   optional, e.g. https://go.clefsoft.co.uk . Default: <api>/api/bootstrap/go
  *
  * What it does NOT touch: test files (fix their expected strings yourself, they are guards),
  * docs links (docs.autopilotmonitor.com stays upstream's public docs), generated lockfiles.
@@ -45,18 +48,21 @@ const api = trim(cfg.apiBaseUrl);
 const portal = trim(cfg.portalUrl);
 const mcp = trim(cfg.mcpUrl);
 const blob = `https://${cfg.dataStorageAccount}.blob.core.windows.net`;
+const download = cfg.downloadBaseUrl ? trim(cfg.downloadBaseUrl) : `${blob}/agent`;
+const goBase = cfg.bootstrapGoBaseUrl ? trim(cfg.bootstrapGoBaseUrl) : `${api}/api/bootstrap/go`;
+for (const u of [cfg.downloadBaseUrl, cfg.bootstrapGoBaseUrl]) if (u && !/^https:\/\//.test(u)) { console.error('config: optional URLs must start with https://'); process.exit(2); }
 
 // Order matters: longest / most specific first, so a shorter pattern never eats part of a longer one.
 const replacements = [
   ['https://autopilotmonitor.blob.core.windows.net/agent', `${blob}/agent`],   // legacy mirror host (Constants.AgentBlobBaseUrl)
-  ['https://download.autopilotmonitor.com/agent', `${blob}/agent`],            // Front Door alias -> blob origin (no AFD in the lab)
+  ['https://download.autopilotmonitor.com/agent', download],                    // Front Door alias -> your download host (Cloudflare Worker, or the blob origin)
   ['https://autopilotmonitoreu.blob.core.windows.net', blob],
   ['https://autopilotmonitor-api-eu.azurewebsites.net', api],
   ['https://mcp.autopilotmonitor.com', mcp],
   ['https://portal.autopilotmonitor.com', portal],
   ['https://www.autopilotmonitor.com', portal],
   // go.* short link needs Front Door in upstream. Without it, the backend route works directly:
-  ['https://go.autopilotmonitor.com', `${api}/api/bootstrap/go`],
+  ['https://go.autopilotmonitor.com', goBase],
   // Authenticode publisher pin (subject pattern, so renewals keep working)
   ['O=glueckkanja AG', `O=${cfg.publisherOrg}`],
 ];
