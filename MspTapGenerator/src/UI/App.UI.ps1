@@ -487,6 +487,10 @@ function Start-Validation {
 function Start-Generation {
     param([object[]]$Rows, [bool]$IsRetry = $false)
     $UI = $script:UI
+    if (-not $IsRetry) {
+        $Rows = @($Rows | Where-Object { $_.Status -in 'Valid', 'Warning' })
+        if ($Rows.Count -eq 0) { Show-Msg 'No validated users left to process. Validate again first.' 'Nothing to do' 'OK' 'Information'; return }
+    }
     $o = Get-GenOptions; if (-not $o) { return }
     if (-not $IsRetry -and $script:S.ValidatedKey -ne $o.Key) {
         Show-Msg 'The options changed since validation. Please Validate again.' 'Re-validate' 'OK' 'Warning'; return }
@@ -520,12 +524,14 @@ function Start-Generation {
                     $row.Error = ''; $row.Tap = $t2.Tap; $row.Status = 'Success'
                     $script:S.Created++
                     $u = $script:UserIndex[$d.Upn.ToLowerInvariant()]; if ($u) { $u.Status = 'Success'; $u.Detail = 'TAP created' }
+                    $row.RefreshAll()
                 }
                 'fail' {
                     $row = $script:Results | Where-Object UserPrincipalName -eq $d.Upn | Select-Object -First 1
                     if (-not $row) { $row = [MspTap.TapRow]::new(); $row.UserPrincipalName = $d.Upn; $script:Results.Add($row) }
                     $row.DisplayName = $d.DisplayName; $row.Tap = $null; $row.Status = 'Failed'; $row.Error = $d.Error
                     $u = $script:UserIndex[$d.Upn.ToLowerInvariant()]; if ($u) { $u.Status = 'Failed'; $u.Detail = $d.Error }
+                    $row.RefreshAll()
                 }
                 'progress' {
                     $script:UI.Progress.Value = if ($d.Total) { 100 * $d.Done / $d.Total } else { 0 }
@@ -541,6 +547,8 @@ function Start-Generation {
             param($res)
             $failed = @($script:Results | Where-Object Status -eq 'Failed').Count
             $script:UI.ProgressText.Text = "Finished. $($script:S.Created) created this session, $failed failed."
+            # A finished batch must be re-validated before another one, so passes are never created twice by a double click.
+            $script:S.ValidatedKey = $null
             Set-Busy $false; Update-Dashboard
             if ($script:Results.Count) { $script:UI.MainTabs.SelectedIndex = 3 }
         } `
@@ -639,8 +647,9 @@ function Start-MspTapApp {
     # data bindings
     $UI.QueueGrid.ItemsSource = $script:Users; $UI.ReadyGrid.ItemsSource = $script:Ready; $UI.FailedGrid.ItemsSource = $script:FailedV
     $UI.LkGrid.ItemsSource = $script:Lookup;   $UI.ResultsGrid.ItemsSource = $script:Results
-    $UI.LifetimeCombo.ItemsSource = @(Get-LifetimeOption)
-    $UI.LifetimeCombo.SelectedItem = Get-LifetimeOption | Where-Object Minutes -eq ([int]$script:Settings.DefaultLifetimeMins) | Select-Object -First 1
+    $lifetimes = @(Get-LifetimeOption)
+    $UI.LifetimeCombo.ItemsSource = $lifetimes
+    $UI.LifetimeCombo.SelectedItem = $lifetimes | Where-Object Minutes -eq ([int]$script:Settings.DefaultLifetimeMins) | Select-Object -First 1
     if (-not $UI.LifetimeCombo.SelectedItem) { $UI.LifetimeCombo.SelectedIndex = 1 }
     $UI.LengthSlider.IsEnabled = $false
     $UI.LogLevel.ItemsSource = 'All', 'Info', 'Success', 'Warning', 'Error', 'Audit'; $UI.LogLevel.SelectedIndex = 0

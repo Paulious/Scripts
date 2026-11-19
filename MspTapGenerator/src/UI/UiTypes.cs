@@ -13,6 +13,7 @@ namespace MspTap
             PropertyChangedEventHandler h = PropertyChanged;
             if (h != null) h(this, new PropertyChangedEventArgs(name));
         }
+        public void RefreshAll() { Raise(""); }
     }
 
     // A user in the work queue / lookup results.

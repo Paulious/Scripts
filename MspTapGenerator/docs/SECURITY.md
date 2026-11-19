@@ -16,7 +16,7 @@ No passwords, access tokens or refresh tokens are saved. Interactive sign-in use
 1. The SDK returns the TAP as a plain string. It is converted to a `SecureString` immediately and the property on the response object is nulled.
 2. Rows in the results grid hold the `SecureString`. Plain text exists only while: the grid is revealed, a value is being copied, or a file is being exported.
 3. The grid is masked by default and **auto-hides** after 30 seconds.
-4. **Log scrubbing.** TAP values are never passed to the logger. As a second layer, each TAP is also registered as a secret, and `Protect-LogText` replaces any occurrence in any log line (also bearer tokens, JWTs, and `temporaryAccessPass` JSON members in echoed Graph errors). Tested in `tests/MspTap.Tests.ps1`.
+4. **Log scrubbing.** TAP values are never passed to the logger. As a second layer, each TAP's **SHA-256 hash** (never the value) is registered, and `Protect-LogText` hashes every token in a log line and redacts matches (also bearer tokens, JWTs, and `temporaryAccessPass` JSON members in echoed Graph errors). Tested in `tests/MspTap.Tests.ps1`.
 5. **Clipboard.** Copies are flagged `ExcludeClipboardContentFromMonitorProcessing`, `CanIncludeInClipboardHistory=0`, `CanUploadToCloudClipboard=0` (no Win+V history, no cloud sync) and cleared after 60 seconds if the clipboard still holds the same value (compared by hash).
 6. **Export.** Masked by default (`********`). If unmasked and not password-protected, the admin gets a warning. Optional AES-encrypted workbook. After an unmasked export the TAPs are cleared from memory (default on).
 7. Sign-out, tenant switch and closing the window all clear TAP values and warn first if any are still held.

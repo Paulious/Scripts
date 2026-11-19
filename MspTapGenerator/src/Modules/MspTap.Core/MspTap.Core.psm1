@@ -42,17 +42,25 @@ function Get-SecretRegistry {
     }
     $r
 }
+function Get-TextHash {
+    param([string]$Text)
+    [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData([System.Text.Encoding]::UTF8.GetBytes($Text)))
+}
 function Register-LogSecret {
-    # Any registered value is replaced by [REDACTED] in everything written to the log.
+    # Only the SHA-256 hash is kept, never the value. Any token in a log line whose hash matches is redacted.
     param([string]$Value)
-    if ($Value -and $Value.Length -ge 6) { [void](Get-SecretRegistry).TryAdd($Value, 1) }
+    if ($Value -and $Value.Length -ge 6) { [void](Get-SecretRegistry).TryAdd((Get-TextHash $Value), 1) }
 }
 function Clear-LogSecrets { (Get-SecretRegistry).Clear() }
 
 function Protect-LogText {
     param([AllowNull()][string]$Text)
     if ([string]::IsNullOrEmpty($Text)) { return $Text }
-    foreach ($s in (Get-SecretRegistry).Keys) { $Text = $Text.Replace($s, '[REDACTED]') }
+    $reg = Get-SecretRegistry
+    if ($reg.Count -gt 0) {
+        $Text = [regex]::Replace($Text, '[^\s"''`,;()\[\]{}<>=:.!?]{6,}', [System.Text.RegularExpressions.MatchEvaluator] {
+            param($m) if ($reg.ContainsKey((Get-TextHash $m.Value))) { '[REDACTED]' } else { $m.Value } })
+    }
     # JSON / key=value shapes of the TAP property, in case a Graph payload is echoed back
     $Text = [regex]::Replace($Text, '(?i)("?temporaryAccessPass"?\s*[:=]\s*"?)[^",\s}]+', '$1[REDACTED]')
     # bearer tokens
@@ -79,7 +87,7 @@ function Write-AppLog {
     param(
         [ValidateSet('Info', 'Success', 'Warning', 'Error', 'Audit')][string]$Level = 'Info',
         [ValidateSet('App', 'Auth', 'Graph', 'Import', 'Export', 'Validation', 'Generation', 'Policy', 'UI')][string]$Category = 'App',
-        [Parameter(Mandatory)][string]$Message
+        [Parameter(Mandatory)][AllowEmptyString()][string]$Message
     )
     try {
         $rec = [ordered]@{

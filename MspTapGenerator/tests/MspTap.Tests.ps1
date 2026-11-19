@@ -12,6 +12,17 @@ Describe 'Log scrubbing (TAP must never reach the log)' {
         Register-LogSecret 'Xk9#fT2pQ7zL'
         Protect-LogText 'created Xk9#fT2pQ7zL for bob' | Should -Be 'created [REDACTED] for bob'
     }
+    It 'redacts a TAP at the end of a sentence or inside key=value' {
+        Register-LogSecret 'EndOfSentence77'
+        Protect-LogText 'the pass is EndOfSentence77.' | Should -Be 'the pass is [REDACTED].'
+        Protect-LogText 'tap=EndOfSentence77;' | Should -Be 'tap=[REDACTED];'
+    }
+    It 'keeps only hashes, never the plain value, in the registry' {
+        Register-LogSecret 'PlainValueCheck9'
+        (Get-SecretRegistry).Keys | Should -Not -Contain 'PlainValueCheck9'
+        Clear-LogSecrets
+        Protect-LogText 'PlainValueCheck9' | Should -Be 'PlainValueCheck9'
+    }
     It 'redacts temporaryAccessPass JSON members' {
         Protect-LogText '{"temporaryAccessPass":"abc123XYZ","x":1}' | Should -Not -Match 'abc123XYZ'
     }

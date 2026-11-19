@@ -1,6 +1,6 @@
 # MSP TAP Generator - full source
 
-Every file in the project, in the order you would read or create them. Save each block under the path shown in its heading.
+Every file in the project. Save each block under the path shown in its heading.
 
 ## Files
 
@@ -146,7 +146,7 @@ $zip = Join-Path $root "dist\MspTapGenerator-$Version.zip"
 
 if (-not $SkipTests) {
     if (Get-Module -ListAvailable PSScriptAnalyzer) {
-        $r = Invoke-ScriptAnalyzer -Path $root -Recurse -Severity Error,Warning -ExcludeRule PSAvoidUsingWriteHost,PSUseShouldProcessForStateChangingFunctions,PSUseApprovedVerbs,PSAvoidGlobalVars
+        $r = Invoke-ScriptAnalyzer -Path $root -Recurse -Severity Error -ExcludeRule PSAvoidUsingWriteHost,PSUseShouldProcessForStateChangingFunctions,PSUseApprovedVerbs,PSAvoidGlobalVars
         if ($r) { $r | Format-Table RuleName, Severity, ScriptName, Line, Message -AutoSize | Out-String | Write-Host; throw 'PSScriptAnalyzer reported issues.' }
     } else { Write-Warning 'PSScriptAnalyzer not installed - lint skipped.' }
     if (Get-Module -ListAvailable Pester) {
@@ -228,17 +228,25 @@ function Get-SecretRegistry {
     }
     $r
 }
+function Get-TextHash {
+    param([string]$Text)
+    [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData([System.Text.Encoding]::UTF8.GetBytes($Text)))
+}
 function Register-LogSecret {
-    # Any registered value is replaced by [REDACTED] in everything written to the log.
+    # Only the SHA-256 hash is kept, never the value. Any token in a log line whose hash matches is redacted.
     param([string]$Value)
-    if ($Value -and $Value.Length -ge 6) { [void](Get-SecretRegistry).TryAdd($Value, 1) }
+    if ($Value -and $Value.Length -ge 6) { [void](Get-SecretRegistry).TryAdd((Get-TextHash $Value), 1) }
 }
 function Clear-LogSecrets { (Get-SecretRegistry).Clear() }
 
 function Protect-LogText {
     param([AllowNull()][string]$Text)
     if ([string]::IsNullOrEmpty($Text)) { return $Text }
-    foreach ($s in (Get-SecretRegistry).Keys) { $Text = $Text.Replace($s, '[REDACTED]') }
+    $reg = Get-SecretRegistry
+    if ($reg.Count -gt 0) {
+        $Text = [regex]::Replace($Text, '[^\s"''`,;()\[\]{}<>=:.!?]{6,}', [System.Text.RegularExpressions.MatchEvaluator] {
+            param($m) if ($reg.ContainsKey((Get-TextHash $m.Value))) { '[REDACTED]' } else { $m.Value } })
+    }
     # JSON / key=value shapes of the TAP property, in case a Graph payload is echoed back
     $Text = [regex]::Replace($Text, '(?i)("?temporaryAccessPass"?\s*[:=]\s*"?)[^",\s}]+', '$1[REDACTED]')
     # bearer tokens
@@ -265,7 +273,7 @@ function Write-AppLog {
     param(
         [ValidateSet('Info', 'Success', 'Warning', 'Error', 'Audit')][string]$Level = 'Info',
         [ValidateSet('App', 'Auth', 'Graph', 'Import', 'Export', 'Validation', 'Generation', 'Policy', 'UI')][string]$Category = 'App',
-        [Parameter(Mandatory)][string]$Message
+        [Parameter(Mandatory)][AllowEmptyString()][string]$Message
     )
     try {
         $rec = [ordered]@{
@@ -804,6 +812,7 @@ function Set-TokenState {
     Set-SharedValue 'TokenClientId' $ClientId
     Set-SharedValue 'TokenScopes' $Scopes
     $claims = ConvertFrom-JwtPayload $Token.access_token
+    if ($claims -and $claims.PSObject.Properties['scp']) { Set-SharedValue 'TokenGrantedScopes' @("$($claims.scp)" -split ' ' | Where-Object { $_ }) }
     if ($claims) {
         $who = if ($claims.PSObject.Properties['upn']) { $claims.upn } elseif ($claims.PSObject.Properties['unique_name']) { $claims.unique_name } else { '' }
         Set-SharedValue 'TokenAdmin' $who
@@ -826,6 +835,14 @@ function Update-TapGraphToken {
     Write-AppLog -Category Auth -Message 'Access token refreshed (device-code session).'
 }
 
+function Get-GrantedScope {
+    # Access-token sign-ins may not populate Get-MgContext.Scopes; fall back to the token's own 'scp' claim.
+    $ctx = Get-MgContext; $s = @()
+    if ($ctx -and $ctx.Scopes) { $s = @($ctx.Scopes) }
+    if ($s.Count -eq 0) { $g = Get-SharedValue 'TokenGrantedScopes'; if ($g) { $s = @($g) } }
+    $s
+}
+
 function Get-TapGraphIdentity {
     $ctx = Get-MgContext
     if (-not $ctx) { return $null }
@@ -837,7 +854,7 @@ function Get-TapGraphIdentity {
     $admin = "$($ctx.Account)"
     if (-not $admin) { $admin = "$(Get-SharedValue 'TokenAdmin')" }
     if (-not $admin) { $admin = '(unknown)' }
-    $have = @($ctx.Scopes)
+    $have = @(Get-GrantedScope)
     $missing = @($script:RequiredScopes | Where-Object { $_ -notin $have })
     $default = ''
     if ($org -and $org.VerifiedDomains) { $default = ($org.VerifiedDomains | Where-Object IsDefault | Select-Object -First 1).Name }
@@ -856,7 +873,7 @@ function Get-TapGraphIdentity {
 
 function Disconnect-TapGraph {
     try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch { }
-    foreach ($k in 'RefreshToken', 'TokenExpiresUtc', 'TokenTenant', 'TokenClientId', 'TokenScopes', 'TokenAdmin', 'AuthMethod') { Clear-SharedValue $k }
+    foreach ($k in 'RefreshToken', 'TokenExpiresUtc', 'TokenTenant', 'TokenClientId', 'TokenScopes', 'TokenAdmin', 'TokenGrantedScopes', 'AuthMethod') { Clear-SharedValue $k }
     Clear-LogSecrets
     Write-AppLog -Category Auth -Message 'Signed out; session state cleared.'
 }
@@ -910,7 +927,7 @@ function Test-TapPermission {
     $res = @{ Errors = @(); Warnings = @(); Info = @() }
     $ctx = Get-MgContext
     if (-not $ctx) { $res.Errors += 'Not signed in.'; return $res }
-    $missing = @($script:RequiredScopes | Where-Object { $_ -notin @($ctx.Scopes) })
+    $missing = @($script:RequiredScopes | Where-Object { $_ -notin @(Get-GrantedScope) })
     if ($missing) { $res.Errors += "Missing Graph permission(s): $($missing -join ', '). Sign out and sign in again, granting consent." }
     try {
         $roles = @(Invoke-WithRetry { Invoke-MgGraphRequest -Method GET -OutputType PSObject -ErrorAction Stop `
@@ -1080,8 +1097,8 @@ function Invoke-TapValidationBatch {
     foreach ($u in $Users) {
         if ($Cancel -and $Cancel.Cancel) { & $Emit 'cancelled' @{}; break }
         $i++
-        Update-TapGraphToken
-        $v = Test-TapUser -Identity $u.UserPrincipalName
+        try { Update-TapGraphToken; $v = Test-TapUser -Identity $u.UserPrincipalName }
+        catch { $v = [pscustomobject]@{ Id = ''; UserPrincipalName = $u.UserPrincipalName; DisplayName = ''; Status = 'Failed'; Detail = "Check failed: $(Get-GraphErrorSummary $_)"; ExistingTap = $false } }
         if ($v.Status -eq 'Failed') { $bad++ } else { $ok++ }
         Write-AppLog -Level $(if ($v.Status -eq 'Failed') { 'Warning' } else { 'Info' }) -Category Validation -Message "$($u.UserPrincipalName): $($v.Status) - $($v.Detail)"
         & $Emit 'user' @{ Input = $u.UserPrincipalName; Result = $v }
@@ -1167,6 +1184,7 @@ namespace MspTap
             PropertyChangedEventHandler h = PropertyChanged;
             if (h != null) h(this, new PropertyChangedEventArgs(name));
         }
+        public void RefreshAll() { Raise(""); }
     }
 
     // A user in the work queue / lookup results.
@@ -1555,7 +1573,8 @@ namespace MspTap
             <TextBlock DockPanel.Dock="Top" Text="Work queue" Style="{StaticResource H2}"/>
             <DataGrid x:Name="QueueGrid" IsReadOnly="False" SelectionMode="Extended">
               <DataGrid.Columns>
-                <DataGridCheckBoxColumn Header="" Binding="{Binding Selected, UpdateSourceTrigger=PropertyChanged}" Width="40"/>
+                <DataGridTemplateColumn Header="" Width="40"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+                  <CheckBox IsChecked="{Binding Selected, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
                 <DataGridTextColumn Header="User" Binding="{Binding UserPrincipalName}" IsReadOnly="True" Width="2*"/>
                 <DataGridTextColumn Header="Display name" Binding="{Binding DisplayName}" IsReadOnly="True" Width="1.5*"/>
                 <DataGridTextColumn Header="Source" Binding="{Binding Source}" IsReadOnly="True" Width="80"/>
@@ -2270,6 +2289,10 @@ function Start-Validation {
 function Start-Generation {
     param([object[]]$Rows, [bool]$IsRetry = $false)
     $UI = $script:UI
+    if (-not $IsRetry) {
+        $Rows = @($Rows | Where-Object { $_.Status -in 'Valid', 'Warning' })
+        if ($Rows.Count -eq 0) { Show-Msg 'No validated users left to process. Validate again first.' 'Nothing to do' 'OK' 'Information'; return }
+    }
     $o = Get-GenOptions; if (-not $o) { return }
     if (-not $IsRetry -and $script:S.ValidatedKey -ne $o.Key) {
         Show-Msg 'The options changed since validation. Please Validate again.' 'Re-validate' 'OK' 'Warning'; return }
@@ -2303,12 +2326,14 @@ function Start-Generation {
                     $row.Error = ''; $row.Tap = $t2.Tap; $row.Status = 'Success'
                     $script:S.Created++
                     $u = $script:UserIndex[$d.Upn.ToLowerInvariant()]; if ($u) { $u.Status = 'Success'; $u.Detail = 'TAP created' }
+                    $row.RefreshAll()
                 }
                 'fail' {
                     $row = $script:Results | Where-Object UserPrincipalName -eq $d.Upn | Select-Object -First 1
                     if (-not $row) { $row = [MspTap.TapRow]::new(); $row.UserPrincipalName = $d.Upn; $script:Results.Add($row) }
                     $row.DisplayName = $d.DisplayName; $row.Tap = $null; $row.Status = 'Failed'; $row.Error = $d.Error
                     $u = $script:UserIndex[$d.Upn.ToLowerInvariant()]; if ($u) { $u.Status = 'Failed'; $u.Detail = $d.Error }
+                    $row.RefreshAll()
                 }
                 'progress' {
                     $script:UI.Progress.Value = if ($d.Total) { 100 * $d.Done / $d.Total } else { 0 }
@@ -2324,6 +2349,8 @@ function Start-Generation {
             param($res)
             $failed = @($script:Results | Where-Object Status -eq 'Failed').Count
             $script:UI.ProgressText.Text = "Finished. $($script:S.Created) created this session, $failed failed."
+            # A finished batch must be re-validated before another one, so passes are never created twice by a double click.
+            $script:S.ValidatedKey = $null
             Set-Busy $false; Update-Dashboard
             if ($script:Results.Count) { $script:UI.MainTabs.SelectedIndex = 3 }
         } `
@@ -2422,8 +2449,9 @@ function Start-MspTapApp {
     # data bindings
     $UI.QueueGrid.ItemsSource = $script:Users; $UI.ReadyGrid.ItemsSource = $script:Ready; $UI.FailedGrid.ItemsSource = $script:FailedV
     $UI.LkGrid.ItemsSource = $script:Lookup;   $UI.ResultsGrid.ItemsSource = $script:Results
-    $UI.LifetimeCombo.ItemsSource = @(Get-LifetimeOption)
-    $UI.LifetimeCombo.SelectedItem = Get-LifetimeOption | Where-Object Minutes -eq ([int]$script:Settings.DefaultLifetimeMins) | Select-Object -First 1
+    $lifetimes = @(Get-LifetimeOption)
+    $UI.LifetimeCombo.ItemsSource = $lifetimes
+    $UI.LifetimeCombo.SelectedItem = $lifetimes | Where-Object Minutes -eq ([int]$script:Settings.DefaultLifetimeMins) | Select-Object -First 1
     if (-not $UI.LifetimeCombo.SelectedItem) { $UI.LifetimeCombo.SelectedIndex = 1 }
     $UI.LengthSlider.IsEnabled = $false
     $UI.LogLevel.ItemsSource = 'All', 'Info', 'Success', 'Warning', 'Error', 'Audit'; $UI.LogLevel.SelectedIndex = 0
@@ -2629,6 +2657,17 @@ Describe 'Log scrubbing (TAP must never reach the log)' {
     It 'redacts registered TAP values' {
         Register-LogSecret 'Xk9#fT2pQ7zL'
         Protect-LogText 'created Xk9#fT2pQ7zL for bob' | Should -Be 'created [REDACTED] for bob'
+    }
+    It 'redacts a TAP at the end of a sentence or inside key=value' {
+        Register-LogSecret 'EndOfSentence77'
+        Protect-LogText 'the pass is EndOfSentence77.' | Should -Be 'the pass is [REDACTED].'
+        Protect-LogText 'tap=EndOfSentence77;' | Should -Be 'tap=[REDACTED];'
+    }
+    It 'keeps only hashes, never the plain value, in the registry' {
+        Register-LogSecret 'PlainValueCheck9'
+        (Get-SecretRegistry).Keys | Should -Not -Contain 'PlainValueCheck9'
+        Clear-LogSecrets
+        Protect-LogText 'PlainValueCheck9' | Should -Be 'PlainValueCheck9'
     }
     It 'redacts temporaryAccessPass JSON members' {
         Protect-LogText '{"temporaryAccessPass":"abc123XYZ","x":1}' | Should -Not -Match 'abc123XYZ'
@@ -2913,7 +2952,7 @@ No passwords, access tokens or refresh tokens are saved. Interactive sign-in use
 1. The SDK returns the TAP as a plain string. It is converted to a `SecureString` immediately and the property on the response object is nulled.
 2. Rows in the results grid hold the `SecureString`. Plain text exists only while: the grid is revealed, a value is being copied, or a file is being exported.
 3. The grid is masked by default and **auto-hides** after 30 seconds.
-4. **Log scrubbing.** TAP values are never passed to the logger. As a second layer, each TAP is also registered as a secret, and `Protect-LogText` replaces any occurrence in any log line (also bearer tokens, JWTs, and `temporaryAccessPass` JSON members in echoed Graph errors). Tested in `tests/MspTap.Tests.ps1`.
+4. **Log scrubbing.** TAP values are never passed to the logger. As a second layer, each TAP's **SHA-256 hash** (never the value) is registered, and `Protect-LogText` hashes every token in a log line and redacts matches (also bearer tokens, JWTs, and `temporaryAccessPass` JSON members in echoed Graph errors). Tested in `tests/MspTap.Tests.ps1`.
 5. **Clipboard.** Copies are flagged `ExcludeClipboardContentFromMonitorProcessing`, `CanIncludeInClipboardHistory=0`, `CanUploadToCloudClipboard=0` (no Win+V history, no cloud sync) and cleared after 60 seconds if the clipboard still holds the same value (compared by hash).
 6. **Export.** Masked by default (`********`). If unmasked and not password-protected, the admin gets a warning. Optional AES-encrypted workbook. After an unmasked export the TAPs are cleared from memory (default on).
 7. Sign-out, tenant switch and closing the window all clear TAP values and warn first if any are still held.

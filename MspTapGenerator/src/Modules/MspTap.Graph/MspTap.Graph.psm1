@@ -108,6 +108,7 @@ function Set-TokenState {
     Set-SharedValue 'TokenClientId' $ClientId
     Set-SharedValue 'TokenScopes' $Scopes
     $claims = ConvertFrom-JwtPayload $Token.access_token
+    if ($claims -and $claims.PSObject.Properties['scp']) { Set-SharedValue 'TokenGrantedScopes' @("$($claims.scp)" -split ' ' | Where-Object { $_ }) }
     if ($claims) {
         $who = if ($claims.PSObject.Properties['upn']) { $claims.upn } elseif ($claims.PSObject.Properties['unique_name']) { $claims.unique_name } else { '' }
         Set-SharedValue 'TokenAdmin' $who
@@ -130,6 +131,14 @@ function Update-TapGraphToken {
     Write-AppLog -Category Auth -Message 'Access token refreshed (device-code session).'
 }
 
+function Get-GrantedScope {
+    # Access-token sign-ins may not populate Get-MgContext.Scopes; fall back to the token's own 'scp' claim.
+    $ctx = Get-MgContext; $s = @()
+    if ($ctx -and $ctx.Scopes) { $s = @($ctx.Scopes) }
+    if ($s.Count -eq 0) { $g = Get-SharedValue 'TokenGrantedScopes'; if ($g) { $s = @($g) } }
+    $s
+}
+
 function Get-TapGraphIdentity {
     $ctx = Get-MgContext
     if (-not $ctx) { return $null }
@@ -141,7 +150,7 @@ function Get-TapGraphIdentity {
     $admin = "$($ctx.Account)"
     if (-not $admin) { $admin = "$(Get-SharedValue 'TokenAdmin')" }
     if (-not $admin) { $admin = '(unknown)' }
-    $have = @($ctx.Scopes)
+    $have = @(Get-GrantedScope)
     $missing = @($script:RequiredScopes | Where-Object { $_ -notin $have })
     $default = ''
     if ($org -and $org.VerifiedDomains) { $default = ($org.VerifiedDomains | Where-Object IsDefault | Select-Object -First 1).Name }
@@ -160,7 +169,7 @@ function Get-TapGraphIdentity {
 
 function Disconnect-TapGraph {
     try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch { }
-    foreach ($k in 'RefreshToken', 'TokenExpiresUtc', 'TokenTenant', 'TokenClientId', 'TokenScopes', 'TokenAdmin', 'AuthMethod') { Clear-SharedValue $k }
+    foreach ($k in 'RefreshToken', 'TokenExpiresUtc', 'TokenTenant', 'TokenClientId', 'TokenScopes', 'TokenAdmin', 'TokenGrantedScopes', 'AuthMethod') { Clear-SharedValue $k }
     Clear-LogSecrets
     Write-AppLog -Category Auth -Message 'Signed out; session state cleared.'
 }
@@ -214,7 +223,7 @@ function Test-TapPermission {
     $res = @{ Errors = @(); Warnings = @(); Info = @() }
     $ctx = Get-MgContext
     if (-not $ctx) { $res.Errors += 'Not signed in.'; return $res }
-    $missing = @($script:RequiredScopes | Where-Object { $_ -notin @($ctx.Scopes) })
+    $missing = @($script:RequiredScopes | Where-Object { $_ -notin @(Get-GrantedScope) })
     if ($missing) { $res.Errors += "Missing Graph permission(s): $($missing -join ', '). Sign out and sign in again, granting consent." }
     try {
         $roles = @(Invoke-WithRetry { Invoke-MgGraphRequest -Method GET -OutputType PSObject -ErrorAction Stop `
@@ -384,8 +393,8 @@ function Invoke-TapValidationBatch {
     foreach ($u in $Users) {
         if ($Cancel -and $Cancel.Cancel) { & $Emit 'cancelled' @{}; break }
         $i++
-        Update-TapGraphToken
-        $v = Test-TapUser -Identity $u.UserPrincipalName
+        try { Update-TapGraphToken; $v = Test-TapUser -Identity $u.UserPrincipalName }
+        catch { $v = [pscustomobject]@{ Id = ''; UserPrincipalName = $u.UserPrincipalName; DisplayName = ''; Status = 'Failed'; Detail = "Check failed: $(Get-GraphErrorSummary $_)"; ExistingTap = $false } }
         if ($v.Status -eq 'Failed') { $bad++ } else { $ok++ }
         Write-AppLog -Level $(if ($v.Status -eq 'Failed') { 'Warning' } else { 'Info' }) -Category Validation -Message "$($u.UserPrincipalName): $($v.Status) - $($v.Detail)"
         & $Emit 'user' @{ Input = $u.UserPrincipalName; Result = $v }

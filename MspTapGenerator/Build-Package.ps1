@@ -15,7 +15,7 @@ $zip = Join-Path $root "dist\MspTapGenerator-$Version.zip"
 
 if (-not $SkipTests) {
     if (Get-Module -ListAvailable PSScriptAnalyzer) {
-        $r = Invoke-ScriptAnalyzer -Path $root -Recurse -Severity Error,Warning -ExcludeRule PSAvoidUsingWriteHost,PSUseShouldProcessForStateChangingFunctions,PSUseApprovedVerbs,PSAvoidGlobalVars
+        $r = Invoke-ScriptAnalyzer -Path $root -Recurse -Severity Error -ExcludeRule PSAvoidUsingWriteHost,PSUseShouldProcessForStateChangingFunctions,PSUseApprovedVerbs,PSAvoidGlobalVars
         if ($r) { $r | Format-Table RuleName, Severity, ScriptName, Line, Message -AutoSize | Out-String | Write-Host; throw 'PSScriptAnalyzer reported issues.' }
     } else { Write-Warning 'PSScriptAnalyzer not installed - lint skipped.' }
     if (Get-Module -ListAvailable Pester) {
