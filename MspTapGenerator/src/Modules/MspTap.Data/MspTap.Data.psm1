@@ -75,7 +75,7 @@ function Get-XlsxSheetName {
     param([Parameter(Mandatory)][string]$Path)
     Initialize-ExcelModule
     $tmp = Copy-ToTemp $Path
-    try { @(Get-ExcelSheetInfo -Path $tmp | Where-Object { $_.State -ne 'VeryHidden' } | ForEach-Object Name) }
+    try { @(Get-ExcelSheetInfo -Path $tmp | Where-Object { -not ($_.PSObject.Properties['Hidden'] -and "$($_.Hidden)" -eq 'VeryHidden') } | ForEach-Object Name) }
     finally { Remove-Item $tmp -Force -ErrorAction SilentlyContinue }
 }
 

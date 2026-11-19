@@ -249,7 +249,8 @@ function Get-ErrorStatusCode {
             if ($null -ne $v) { return [int]$v }
         } catch { }
     }
-    $msg = "$($ex.Message) $($ErrorRecord.ErrorDetails.Message)"
+    $det = if ($ErrorRecord.ErrorDetails) { $ErrorRecord.ErrorDetails.Message } else { '' }   # ErrorDetails is often null (strict mode throws on it)
+    $msg = "$($ex.Message) $det"
     if ($msg -match 'TooManyRequests|\b429\b|throttl') { return 429 }
     if ($msg -match 'ServiceUnavailable|\b503\b') { return 503 }
     if ($msg -match 'GatewayTimeout|\b504\b') { return 504 }

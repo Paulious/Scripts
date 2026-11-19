@@ -435,7 +435,8 @@ function Get-ErrorStatusCode {
             if ($null -ne $v) { return [int]$v }
         } catch { }
     }
-    $msg = "$($ex.Message) $($ErrorRecord.ErrorDetails.Message)"
+    $det = if ($ErrorRecord.ErrorDetails) { $ErrorRecord.ErrorDetails.Message } else { '' }   # ErrorDetails is often null (strict mode throws on it)
+    $msg = "$($ex.Message) $det"
     if ($msg -match 'TooManyRequests|\b429\b|throttl') { return 429 }
     if ($msg -match 'ServiceUnavailable|\b503\b') { return 503 }
     if ($msg -match 'GatewayTimeout|\b504\b') { return 504 }
@@ -590,7 +591,7 @@ function Get-XlsxSheetName {
     param([Parameter(Mandatory)][string]$Path)
     Initialize-ExcelModule
     $tmp = Copy-ToTemp $Path
-    try { @(Get-ExcelSheetInfo -Path $tmp | Where-Object { $_.State -ne 'VeryHidden' } | ForEach-Object Name) }
+    try { @(Get-ExcelSheetInfo -Path $tmp | Where-Object { -not ($_.PSObject.Properties['Hidden'] -and "$($_.Hidden)" -eq 'VeryHidden') } | ForEach-Object Name) }
     finally { Remove-Item $tmp -Force -ErrorAction SilentlyContinue }
 }
 
