@@ -93,7 +93,7 @@ $script:WorkerScript = {
     param($Command, $Params, $Queue, $Cancel, $LogCtx)
     $ErrorActionPreference = 'Stop'
     try {
-        Set-LogContext -Session $LogCtx.Session -Tenant $LogCtx.Tenant -TenantId $LogCtx.TenantId -Admin $LogCtx.Admin
+        Set-LogContext -Session $LogCtx.Session -Tenant $LogCtx.Tenant -TenantId $LogCtx.TenantId -Admin $LogCtx.Admin -Ticket $LogCtx.Ticket
         $emit = { param($t, $d) $Queue.Enqueue([pscustomobject]@{ Type = $t; Data = $d }) }.GetNewClosure()
         $p = @{} + $Params
         $cmd = Get-Command $Command
@@ -108,7 +108,7 @@ $script:WorkerScript = {
     }
 }
 
-function Get-LogContextArgs { $c = Get-LogContext; @{ Session = $c.Session; Tenant = $c.Tenant; TenantId = $c.TenantId; Admin = $c.Admin } }
+function Get-LogContextArgs { $c = Get-LogContext; @{ Session = $c.Session; Tenant = $c.Tenant; TenantId = $c.TenantId; Admin = $c.Admin; Ticket = $c.Ticket } }
 
 function Start-AppTask {
     <# Runs a module command in the worker pool (or inline in compatibility mode). Handlers always run on the UI thread. #>
@@ -407,6 +407,10 @@ function Get-LookupParams {
 # ============================================================ generation
 function Get-GenOptions {
     $UI = $script:UI
+    $ticket = $UI.TicketBox.Text.Trim()
+    if ($ticket.Length -gt 100 -or $ticket -match '[\r\n]') { Show-Msg 'Ticket reference must be one line, 100 characters or less.' 'Options' 'OK' 'Warning'; return $null }
+    if (-not $ticket -and $script:Settings.RequireTicket) { Show-Msg 'A ticket / change reference is required (RequireTicket is on in settings.json).' 'Options' 'OK' 'Warning'; return $null }
+    Set-LogContext -Ticket $ticket
     $lt = $UI.LifetimeCombo.SelectedItem
     if (-not $lt) { Show-Msg 'Choose a lifetime.' 'Options' 'OK' 'Warning'; return $null }
     $start = $null
@@ -423,6 +427,7 @@ function Get-GenOptions {
         PolicyLength = if ($UI.ApplyLengthCheck.IsChecked) { [int]$UI.LengthSlider.Value } else { 0 }
         RestorePolicyLength = [bool]$UI.RestoreLengthCheck.IsChecked
     }
+    $o.Ticket = $ticket
     $o.Key = "$($o.LifetimeMinutes)|$($o.OneTime)|$($o.StartUtc)|$($o.ReplaceExisting)"
     $o
 }
@@ -490,7 +495,8 @@ function Start-Generation {
         Show-Msg "Changing the tenant TAP length needs the Policy.ReadWrite.AuthenticationMethod permission.`n`nSign out and sign in again with that box ticked, or untick 'Apply this length'." 'Permission needed' 'OK' 'Warning'; return }
     $id = $script:S.Identity
     $name = if ($script:S.CustomerName) { $script:S.CustomerName } else { $id.TenantName }
-    $text = "Create $($Rows.Count) Temporary Access Pass(es) in:`n`n   $name`n   Tenant ID: $($id.TenantId)`n`nLifetime: $(Format-Lifetime $o.LifetimeMinutes)`nOne-time use: $($o.OneTime)`nActivation: $(if ($o.StartUtc) { ([datetime]$o.StartUtc).ToLocalTime().ToString('yyyy-MM-dd HH:mm') } else { 'immediately' })"
+    $tk = if ($o.Ticket) { $o.Ticket } else { '(none entered)' }
+    $text = "Ticket / change: $tk`n`nCreate $($Rows.Count) Temporary Access Pass(es) in:`n`n   $name`n   Tenant ID: $($id.TenantId)`n`nLifetime: $(Format-Lifetime $o.LifetimeMinutes)`nOne-time use: $($o.OneTime)`nActivation: $(if ($o.StartUtc) { ([datetime]$o.StartUtc).ToLocalTime().ToString('yyyy-MM-dd HH:mm') } else { 'immediately' })"
     if ($o.ReplaceExisting) { $text += "`n`nExisting TAPs for these users will be DELETED and replaced." }
     if ($o.PolicyLength -gt 0) { $text += "`n`nTenant-wide TAP length will be set to $($o.PolicyLength)$(if ($o.RestorePolicyLength) { ' and restored afterwards' } else { ' and NOT restored' })." }
     if ((Show-Msg ($text + "`n`nContinue?") 'Confirm TAP creation' 'YesNo' 'Question') -ne 'Yes') { return }
@@ -580,7 +586,7 @@ function Export-Results {
             [pscustomobject]@{ UserPrincipalName = $r.UserPrincipalName; DisplayName = $r.DisplayName; Tap = $r.Tap; TapLength = $r.TapLength
                 OneTimeUse = $r.OneTimeUse; StartUtc = $r.StartUtc; ExpiryUtc = $r.ExpiryUtc; Status = if ($r.Status -eq 'Failed') { "Failed: $($r.Error)" } else { $r.Status } }
         }
-        Export-TapResult -Rows @($rows) -Path $d.FileName -MaskTap:$mask -WorkbookPassword $pw
+        Export-TapResult -Rows @($rows) -Path $d.FileName -MaskTap:$mask -WorkbookPassword $pw -Reference $UI.TicketBox.Text.Trim()
         $msg = "Exported to:`n$($d.FileName)"
         if (-not $mask -and $UI.ClearAfterExportCheck.IsChecked) {
             foreach ($r in $script:Results) { $r.ClearTap() }

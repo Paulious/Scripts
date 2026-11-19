@@ -126,7 +126,8 @@ function Export-TapResult {
         [Parameter(Mandatory)][object[]]$Rows,
         [Parameter(Mandatory)][string]$Path,
         [switch]$MaskTap,
-        [string]$WorkbookPassword
+        [string]$WorkbookPassword,
+        [string]$Reference
     )
     Initialize-ExcelModule
     $data = foreach ($r in $Rows) {
@@ -153,11 +154,12 @@ function Export-TapResult {
         $ws.Cells[$ws.Dimension.Address].AutoFitColumns()
         $ws.Cells['A1'].AddComment('StartTime / ExpiryTime are UTC.', 'MspTap') | Out-Null
         $pkg.Workbook.Properties.Title = 'Temporary Access Passes'
+        if ($Reference) { $pkg.Workbook.Properties.Subject = "Ticket / change: $Reference" }
     }
     finally {
         if ($WorkbookPassword) { Close-ExcelPackage $pkg -Password $WorkbookPassword } else { Close-ExcelPackage $pkg }
     }
-    Write-AppLog -Level Success -Category Export -Message ("Exported {0} rows to {1} (TAP masked: {2}, encrypted: {3})" -f @($Rows).Count, (Split-Path $Path -Leaf), [bool]$MaskTap, [bool]$WorkbookPassword)
+    Write-AppLog -Level Success -Category Export -Message ("Exported {0} rows to {1} (TAP masked: {2}, encrypted: {3}, ticket: {4})" -f @($Rows).Count, (Split-Path $Path -Leaf), [bool]$MaskTap, [bool]$WorkbookPassword, $Reference)
 }
 
 function Export-FailureReport {

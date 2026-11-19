@@ -350,6 +350,7 @@
               <TextBox x:Name="StartBox" IsEnabled="False" ToolTip="yyyy-MM-dd HH:mm  (your local time)"/>
               <TextBlock x:Name="StartHint" Style="{StaticResource Muted}" FontSize="11.5" Text="Format: yyyy-MM-dd HH:mm"/>
               <CheckBox x:Name="ReplaceCheck" Content="Replace an existing TAP (deletes it first)" Margin="0,12,0,5"/>
+              <Label Content="Ticket / change reference (written to the audit log)"/><TextBox x:Name="TicketBox" MaxLength="100"/>
               <Border BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,1,0,0" Margin="0,12,0,12"/>
               <Button x:Name="ValidateBtn" Content="1. Validate selected users" HorizontalAlignment="Stretch" Margin="0,0,0,8"/>
               <Button x:Name="GenerateBtn" Content="2. Generate TAPs" Style="{StaticResource Primary}" HorizontalAlignment="Stretch" Margin="0,0,0,8" IsEnabled="False"/>
@@ -434,6 +435,7 @@
               <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="100"/>
               <DataGridTextColumn Header="Tenant" Binding="{Binding Tenant}" Width="140"/>
               <DataGridTextColumn Header="Admin" Binding="{Binding Admin}" Width="180"/>
+              <DataGridTextColumn Header="Ticket" Binding="{Binding Ticket}" Width="110"/>
               <DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="*"/>
             </DataGrid.Columns></DataGrid>
         </Grid>

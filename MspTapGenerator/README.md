@@ -90,7 +90,7 @@ Run tests on their own: `Invoke-Pester .\tests`
 2. **Import Users.** Add users from CSV, XLSX or Entra. They land in the work queue (tick/untick, remove). Duplicates are dropped.
 3. **Generate TAPs.** Set lifetime and options, click **Validate**, read the results (failures show in their own grid), then **Generate TAPs**. You get a confirmation naming the customer and tenant ID.
 4. **Results.** TAPs are masked. Use Show TAPs, Copy row/selected, or Export XLSX.
-5. **Logs.** Filter by level or category. Audit entries record who signed in to which tenant and what was run (never the TAP).
+5. **Logs.** Filter by level or category. Audit entries record who signed in to which tenant, the ticket / change reference, and what was run (never the TAP).
 
 CSV formats accepted (header names are not case sensitive, `UPN`, `Email` and `Name` also work):
 
@@ -134,7 +134,6 @@ For partners using GDAP, the relationship must include one of those roles. PIM-e
 - Do you want your own app registration (recommended) or the Microsoft one?
 - Is the TAP policy enabled and targeted at "All users" for each customer, or only a group?
 - Where should exported workbooks live, and who is allowed to open them? Suggest a password-protected workbook on an encrypted drive.
-- Should we add a ticket reference field to the audit log (for change records)?
 
 ## Pilot checklist
 

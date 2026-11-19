@@ -62,10 +62,11 @@ function Protect-LogText {
 }
 
 # --------------------------------------------------------------- logging
-$script:LogContext = @{ Session = [guid]::NewGuid().ToString('N').Substring(0, 8); Tenant = ''; TenantId = ''; Admin = '' }
+$script:LogContext = @{ Session = [guid]::NewGuid().ToString('N').Substring(0, 8); Tenant = ''; TenantId = ''; Admin = ''; Ticket = '' }
 
 function Set-LogContext {
-    param([string]$Session, [string]$Tenant, [string]$TenantId, [string]$Admin)
+    param([string]$Session, [string]$Tenant, [string]$TenantId, [string]$Admin, [string]$Ticket)
+    if ($PSBoundParameters.ContainsKey('Ticket'))   { $script:LogContext.Ticket   = $Ticket }
     if ($PSBoundParameters.ContainsKey('Session'))  { $script:LogContext.Session  = $Session }
     if ($PSBoundParameters.ContainsKey('Tenant'))   { $script:LogContext.Tenant   = $Tenant }
     if ($PSBoundParameters.ContainsKey('TenantId')) { $script:LogContext.TenantId = $TenantId }
@@ -89,6 +90,7 @@ function Write-AppLog {
             tenant   = $script:LogContext.Tenant
             tenantId = $script:LogContext.TenantId
             admin    = $script:LogContext.Admin
+            ticket   = $script:LogContext.Ticket
             message  = (Protect-LogText $Message)
         }
         $line = ($rec | ConvertTo-Json -Compress) + [Environment]::NewLine
@@ -120,7 +122,7 @@ function Read-AppLog {
                     $o = $lines[$i] | ConvertFrom-Json
                     $out.Add([pscustomobject]@{
                         Time = ([datetime]$o.ts).ToLocalTime().ToString('yyyy-MM-dd HH:mm:ss')
-                        Level = $o.level; Category = $o.category; Tenant = $o.tenant; Admin = $o.admin; Message = $o.message
+                        Level = $o.level; Category = $o.category; Tenant = $o.tenant; Admin = $o.admin; Ticket = $(if ($o.PSObject.Properties['ticket']) { $o.ticket } else { '' }); Message = $o.message
                     })
                 } catch { }
                 if ($out.Count -ge $Max) { return $out }
@@ -145,6 +147,7 @@ $script:DefaultSettings = [ordered]@{
     ClipboardClearSecs   = 60
     AutoHideTapSecs      = 30
     DefaultLifetimeMins  = 60
+    RequireTicket        = $false           # true = block Validate/Generate until a ticket reference is entered
     RunInline            = $false            # compatibility mode: run Graph work on the UI thread
 }
 function Get-AppSettings {
