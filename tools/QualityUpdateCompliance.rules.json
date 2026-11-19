@@ -1,0 +1,46 @@
+{
+  "Rules": [
+    {
+      "SettingName": "QualityUpdateState",
+      "Operator": "IsEquals",
+      "DataType": "String",
+      "Operand": "Compliant",
+      "MoreInfoUrl": "https://support.microsoft.com/windows/update-windows-3c5ae7fc-9fb6-9af1-1984-b5e0412c556a",
+      "RemediationStrings": [
+        {
+          "Language": "en_US",
+          "Title": "Windows security updates are out of date",
+          "Description": "This device is more than 2 monthly Windows security updates behind, or could not be checked. Open Settings > Windows Update, install all available updates and restart. If it still shows as not compliant after 24 hours, contact the Service Desk."
+        }
+      ]
+    },
+    {
+      "SettingName": "MonthsBehind",
+      "Operator": "LessEquals",
+      "DataType": "Int64",
+      "Operand": 2,
+      "MoreInfoUrl": "https://support.microsoft.com/windows/update-windows-3c5ae7fc-9fb6-9af1-1984-b5e0412c556a",
+      "RemediationStrings": [
+        {
+          "Language": "en_US",
+          "Title": "Too many months behind on Windows updates",
+          "Description": "This device is more than 2 months behind on Windows security updates. Install all available updates in Settings > Windows Update and restart the device."
+        }
+      ]
+    },
+    {
+      "SettingName": "DaysSinceLastWindowsUpdateInstall",
+      "Operator": "LessEquals",
+      "DataType": "Int64",
+      "Operand": 100,
+      "MoreInfoUrl": "https://support.microsoft.com/windows/update-windows-3c5ae7fc-9fb6-9af1-1984-b5e0412c556a",
+      "RemediationStrings": [
+        {
+          "Language": "en_US",
+          "Title": "No Windows update installed recently",
+          "Description": "No Windows update has been installed on this device for more than 100 days. Connect to the corporate network or VPN, install all available updates in Settings > Windows Update and restart."
+        }
+      ]
+    }
+  ]
+}
