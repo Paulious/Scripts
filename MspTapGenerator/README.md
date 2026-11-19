@@ -84,6 +84,13 @@ The output is `dist\MspTapGenerator-<version>.zip` plus a `.sha256` file. Unzip,
 
 Run tests on their own: `Invoke-Pester .\tests`
 
+## Troubleshooting
+
+| Message | Fix |
+|---|---|
+| `Assembly with same name is already loaded` (Microsoft.Graph.Authentication) | More than one Graph SDK version is installed, or this window already loaded a different one. Run `.\Install-Prerequisites.ps1` (it aligns all five modules to one version), then start the app from a **new** `pwsh -NoProfile` window. Add `-RemoveOtherGraphVersions` to clean up old versions (this affects your other Graph scripts). |
+| Window never opens / script blocked | `Unblock-File` on the files, or `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser`. |
+
 ## Using it
 
 1. **Sign in.** Choose a saved customer or type the tenant ID or domain. Choose Interactive or Device code. Saved customers keep the name and tenant ID only.

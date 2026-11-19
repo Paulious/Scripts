@@ -7,7 +7,31 @@
   in a background runspace or inline.
 #>
 Set-StrictMode -Version Latest
-Import-Module Microsoft.Graph.Authentication -MinimumVersion 2.10.0 -ErrorAction Stop
+
+# The Graph SDK ships as many modules that must ALL be the same version. If several versions are installed,
+# importing mixed versions fails ("Assembly with same name is already loaded"). Pick the newest version that
+# every module we need has, and import exactly that everywhere (UI runspace and workers).
+$script:GraphModuleNames = 'Microsoft.Graph.Authentication', 'Microsoft.Graph.Users', 'Microsoft.Graph.Groups',
+                           'Microsoft.Graph.Identity.SignIns', 'Microsoft.Graph.Identity.DirectoryManagement'
+
+function Get-GraphSdkVersion {
+    $sets = foreach ($n in $script:GraphModuleNames) { , @(Get-Module -ListAvailable -Name $n | ForEach-Object { $_.Version.ToString() } | Select-Object -Unique) }
+    $common = $sets[0]
+    foreach ($set in $sets[1..($sets.Count - 1)]) { $common = @($common | Where-Object { $_ -in $set }) }
+    $common | Where-Object { [version]$_ -ge [version]'2.10.0' } | Sort-Object { [version]$_ } -Descending | Select-Object -First 1
+}
+
+$script:GraphVersion = Get-GraphSdkVersion
+if (-not $script:GraphVersion) {
+    $found = foreach ($n in $script:GraphModuleNames) { '{0}: {1}' -f $n, ((Get-Module -ListAvailable -Name $n | ForEach-Object { $_.Version.ToString() } | Select-Object -Unique) -join ', ') }
+    throw ("The Microsoft Graph PowerShell modules are missing or on different versions (need one version, 2.10.0 or later, shared by all five).`n`n" +
+           ($found -join "`n") + "`n`nFix: run .\Install-Prerequisites.ps1")
+}
+$loaded = Get-Module Microsoft.Graph.Authentication | Where-Object { $_.Version.ToString() -ne $script:GraphVersion }
+if ($loaded) {
+    throw "Microsoft.Graph.Authentication $($loaded.Version) is already loaded in this PowerShell session but this app needs $script:GraphVersion. Close this window and start the app from a fresh one: pwsh -NoProfile -STA -File .\Start-MspTapGenerator.ps1"
+}
+Import-Module Microsoft.Graph.Authentication -RequiredVersion $script:GraphVersion -ErrorAction Stop
 
 $script:RequiredScopes = @('User.Read.All', 'UserAuthenticationMethod.ReadWrite.All', 'Directory.Read.All', 'AuditLog.Read.All')
 $script:PolicyReadScope = 'Policy.Read.All'
@@ -19,7 +43,7 @@ function Get-RequiredScope { $script:RequiredScopes }
 function Initialize-TapGraphModule {
     # Heavy SDK sub-modules are loaded on demand (once per runspace).
     foreach ($m in 'Microsoft.Graph.Users', 'Microsoft.Graph.Groups', 'Microsoft.Graph.Identity.SignIns', 'Microsoft.Graph.Identity.DirectoryManagement') {
-        if (-not (Get-Module $m)) { Import-Module $m -MinimumVersion 2.10.0 -ErrorAction Stop -DisableNameChecking }
+        if (-not (Get-Module $m)) { Import-Module $m -RequiredVersion $script:GraphVersion -ErrorAction Stop -DisableNameChecking }
     }
 }
 

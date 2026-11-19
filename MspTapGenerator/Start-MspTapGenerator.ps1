@@ -42,7 +42,13 @@ $script:ModulePaths = @(
     Join-Path $root 'src\Modules\MspTap.Data\MspTap.Data.psm1'
     Join-Path $root 'src\Modules\MspTap.Graph\MspTap.Graph.psm1'
 )
-foreach ($m in $script:ModulePaths) { Import-Module $m -Force -DisableNameChecking -Global }
+try { foreach ($m in $script:ModulePaths) { Import-Module $m -Force -DisableNameChecking -Global } }
+catch {
+    $msg = "Could not load the app's modules:`n`n$($_.Exception.Message)"
+    Write-Host $msg -ForegroundColor Red
+    [void][System.Windows.MessageBox]::Show($msg, 'MSP TAP Generator', 'OK', 'Error')
+    exit 1
+}
 
 . (Join-Path $root 'src\UI\App.UI.ps1')
 
