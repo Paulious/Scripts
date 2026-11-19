@@ -1,0 +1,44 @@
+diff --git a/src/Web/autopilot-monitor-web/lib/hostRouting.ts b/src/Web/autopilot-monitor-web/lib/hostRouting.ts
+index dbb67d8..87d8543 100644
+--- a/src/Web/autopilot-monitor-web/lib/hostRouting.ts
++++ b/src/Web/autopilot-monitor-web/lib/hostRouting.ts
+@@ -64,6 +64,15 @@ export const PUBLIC_HOST = new URL(SITE_URL).hostname;
+ export const PORTAL_HOST = new URL(PORTAL_URL).hostname;
+ export const APEX_HOST = PUBLIC_HOST.replace(/^www\./, "");
+ 
++/**
++ * Single-host deployment (self-hosted fork): the public site and the portal share ONE hostname,
++ * so there is nothing to route between. Without this, the shared host counts as the "public
++ * host": ProtectedRoute stands down and never starts the sign-in (blank page), and the guard
++ * would bounce the page to its own host. A single host behaves like dev/preview hosts instead:
++ * the guard passes through and MSAL runs on one origin.
++ */
++export const SINGLE_HOST = PUBLIC_HOST === PORTAL_HOST;
++
+ export const DEFAULT_PORTAL_LANDING = "/dashboard";
+ 
+ export function getCurrentHost(): string | null {
+@@ -72,12 +81,12 @@ export function getCurrentHost(): string | null {
+ }
+ 
+ export function isOnPortalHost(): boolean {
+-  return getCurrentHost() === PORTAL_HOST;
++  return !SINGLE_HOST && getCurrentHost() === PORTAL_HOST;
+ }
+ 
+ export function isOnPublicHost(): boolean {
+   const host = getCurrentHost();
+-  return host === PUBLIC_HOST || host === APEX_HOST;
++  return !SINGLE_HOST && (host === PUBLIC_HOST || host === APEX_HOST);
+ }
+ 
+ /**
+@@ -88,7 +97,7 @@ export function isOnPublicHost(): boolean {
+ export function shouldCrossOriginToPortal(): boolean {
+   const host = getCurrentHost();
+   if (host === null) return false;
+-  return host === PUBLIC_HOST || host === APEX_HOST;
++  return !SINGLE_HOST && (host === PUBLIC_HOST || host === APEX_HOST);
+ }
+ 
+ export function getPortalLoginUrl(path: string = DEFAULT_PORTAL_LANDING): string {

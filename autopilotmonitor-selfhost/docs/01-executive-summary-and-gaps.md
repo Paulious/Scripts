@@ -43,6 +43,7 @@ Each gap has the evidence (file in the repo) and what I did about it.
 | **G16** | **Upstream moves fast** ("expect frequent change"; session data may be cleared between major updates). Forks drift. | Docs: requirements-and-access. | Every upstream merge may break your patches. | Patcher is idempotent and config-driven; upgrade strategy in doc 06. |
 | **G17** | **Licence.** Backend, web and MCP are AGPL-3.0; agent and shared library are MIT. | `README.md` licence section. | Private lab use is fine. If *other people* use your modified service over the network, you must offer them the source. | Keep the fork public or get legal advice before opening it to others. |
 | **G18** | **Hardware whitelist rejects unknown makes.** Default: `Dell*`, `HP*`, `Lenovo*`, `Microsoft Corporation`. | `portal-setup.md`. | Hyper-V VMs report "Microsoft Corporation": already allowed. VMware, QEMU, Parallels are not. | Test plan uses Hyper-V. |
+| **G19** | **The portal assumes two hosts** (`www.` for the public site, `portal.` for the app) and derives both from `SITE_URL` and `PORTAL_URL`. With one shared host, `isOnPublicHost()` is true on the portal, so `ProtectedRoute` stands down and **Sign in leads to a blank page**. | `lib/hostRouting.ts`, `components/ProtectedRoute.tsx:92`, `HostRoutingGuard.tsx`. Found on first sign-in. | Blank page after clicking Sign in. | Code patch `patches/0001-single-host-routing.patch`: a shared hostname counts as a single host and the guard passes through. Apply it in step 6. |
 
 ## Delivery plan (assumes one consultant, UK business hours)
 

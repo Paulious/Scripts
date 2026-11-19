@@ -159,6 +159,8 @@ node 01-set-selfhost-endpoints.mjs --repo ../../.. --config selfhost.config.json
 ```
 **Tested result on the real repo:** 38 replacements, 11 files. What remains are comments, placeholders and legal pages.
 
+Then apply the **single-host routing patch** (needed because the portal and the public site share one hostname, gap G19): `git apply deploy/selfhost/patches/0001-single-host-routing.patch`. Without it, **Sign in leads to a blank page**.
+
 Then, by hand:
 1. **Legal pages** (G11): edit `app/privacy/page.tsx`, `app/terms/page.tsx`, `app/about/page.tsx`, `components/SiteFooter.tsx`, `app/layout.tsx` (organisation name). Keep the AGPL/MIT notices and attribution.
 2. **Guard tests** assert the OLD strings (`HardcodedUrlGuardTests.cs`, `hardcodedUrls.guard.test.ts`, `hardcoded-urls.guard.test.ts`, `CodeSigningParityTests`). Run them and update the expected values deliberately:
