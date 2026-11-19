@@ -46,7 +46,7 @@ MspTapGenerator/
       App.UI.ps1                 code-behind, task runner, handlers
   tests/MspTap.Tests.ps1         Pester 5 tests (no Graph needed)
   samples/                       example CSV files
-  docs/                          SECURITY.md, GRAPH-PERMISSIONS.md, ERROR-HANDLING.md
+  docs/                          SECURITY, GRAPH-PERMISSIONS, ERROR-HANDLING, APP-REGISTRATION
 ```
 
 ## Requirements
@@ -115,7 +115,7 @@ For partners using GDAP, the relationship must include one of those roles. PIM-e
 ## Multi-tenant notes (important for MSPs)
 
 - The first sign-in to a customer tenant needs **admin consent** for the delegated permissions. The default app (Microsoft Graph Command Line Tools) often cannot be consented by a GDAP partner account.
-- The clean fix is your own multi-tenant app registration: public client, redirect `http://localhost`, "Allow public client flows = Yes" (for device code), delegated permissions as listed in `docs/GRAPH-PERMISSIONS.md`. Each customer consents once. Paste its client ID under **Advanced** on the sign-in screen, or set `ClientId` in `%LOCALAPPDATA%\MspTapGenerator\settings.json`.
+- The clean fix is your own multi-tenant app registration (step-by-step in `docs/APP-REGISTRATION.md`): public client, redirect `http://localhost`, "Allow public client flows = Yes" (for device code), delegated permissions as listed in `docs/GRAPH-PERMISSIONS.md`. Each customer consents once. Paste its client ID under **Advanced** on the sign-in screen, or set `ClientId` in `%LOCALAPPDATA%\MspTapGenerator\settings.json`.
 - If you type a tenant GUID and Entra signs you in to a different tenant, the tool signs you straight back out.
 - Switching tenant clears the queue and all TAPs from memory.
 
