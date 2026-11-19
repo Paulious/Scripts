@@ -53,6 +53,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     environment: production
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with: { persist-credentials: false }
@@ -61,6 +62,12 @@ jobs:
       # swa-cli pinned by lockfile (tools/swa-cli in the fork). npm ci, never npx.
       - run: npm ci --ignore-scripts
         working-directory: tools/swa-cli
+      # Fail fast: with an empty token the SWA CLI falls back to an interactive Azure sign-in and waits forever.
+      - name: Check the deployment token is present
+        env:
+          SWA_CLI_DEPLOYMENT_TOKEN: ${{ secrets.AZURE_SWA_DEPLOY_TOKEN }}
+        run: |
+          test -n "$SWA_CLI_DEPLOYMENT_TOKEN" || { echo "::error::Secret AZURE_SWA_DEPLOY_TOKEN is empty or missing"; exit 1; }
       - name: Deploy
         env:
           SWA_CLI_DEPLOYMENT_TOKEN: ${{ secrets.AZURE_SWA_DEPLOY_TOKEN }}
