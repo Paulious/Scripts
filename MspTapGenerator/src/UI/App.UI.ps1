@@ -423,12 +423,11 @@ function Get-GenOptions {
     }
     $o = @{
         LifetimeMinutes = [int]$lt.Minutes; OneTime = [bool]$UI.OneTimeCheck.IsChecked; StartUtc = $start
-        ReplaceExisting = [bool]$UI.ReplaceCheck.IsChecked
         PolicyLength = if ($UI.ApplyLengthCheck.IsChecked) { [int]$UI.LengthSlider.Value } else { 0 }
         RestorePolicyLength = [bool]$UI.RestoreLengthCheck.IsChecked
     }
     $o.Ticket = $ticket
-    $o.Key = "$($o.LifetimeMinutes)|$($o.OneTime)|$($o.StartUtc)|$($o.ReplaceExisting)"
+    $o.Key = "$($o.LifetimeMinutes)|$($o.OneTime)|$($o.StartUtc)"
     $o
 }
 
@@ -445,7 +444,7 @@ function Start-Validation {
     $script:S.ValidationAborted = $false
 
     Start-AppTask -Command 'Invoke-TapValidationBatch' -BusyText 'Validating users...' `
-        -Params @{ Users = $list; LifetimeMinutes = $o.LifetimeMinutes; OneTime = $o.OneTime; StartUtc = $o.StartUtc; ReplaceExisting = $o.ReplaceExisting } `
+        -Params @{ Users = $list; LifetimeMinutes = $o.LifetimeMinutes; OneTime = $o.OneTime; StartUtc = $o.StartUtc } `
         -OnMessage {
             param($t, $d)
             switch ($t) {
@@ -497,7 +496,8 @@ function Start-Generation {
     $name = if ($script:S.CustomerName) { $script:S.CustomerName } else { $id.TenantName }
     $tk = if ($o.Ticket) { $o.Ticket } else { '(none entered)' }
     $text = "Ticket / change: $tk`n`nCreate $($Rows.Count) Temporary Access Pass(es) in:`n`n   $name`n   Tenant ID: $($id.TenantId)`n`nLifetime: $(Format-Lifetime $o.LifetimeMinutes)`nOne-time use: $($o.OneTime)`nActivation: $(if ($o.StartUtc) { ([datetime]$o.StartUtc).ToLocalTime().ToString('yyyy-MM-dd HH:mm') } else { 'immediately' })"
-    if ($o.ReplaceExisting) { $text += "`n`nExisting TAPs for these users will be DELETED and replaced." }
+    $existing = @($Rows | Where-Object { $_.Status -eq 'Warning' -and $_.Detail -like '*already has a TAP*' }).Count
+    if ($existing) { $text += "`n`n$existing user(s) already have a TAP. The old pass is replaced (deleted) when the new one is created." }
     if ($o.PolicyLength -gt 0) { $text += "`n`nTenant-wide TAP length will be set to $($o.PolicyLength)$(if ($o.RestorePolicyLength) { ' and restored afterwards' } else { ' and NOT restored' })." }
     if ((Show-Msg ($text + "`n`nContinue?") 'Confirm TAP creation' 'YesNo' 'Question') -ne 'Yes') { return }
 
@@ -506,7 +506,7 @@ function Start-Generation {
     $script:S.LastOptions = $o
 
     Start-AppTask -Command 'Invoke-TapGenerationBatch' -BusyText 'Creating TAPs...' `
-        -Params @{ Users = $list; LifetimeMinutes = $o.LifetimeMinutes; OneTime = $o.OneTime; StartUtc = $o.StartUtc; ReplaceExisting = $o.ReplaceExisting
+        -Params @{ Users = $list; LifetimeMinutes = $o.LifetimeMinutes; OneTime = $o.OneTime; StartUtc = $o.StartUtc
                    PolicyLength = $o.PolicyLength; RestorePolicyLength = $o.RestorePolicyLength } `
         -OnMessage {
             param($t, $d)

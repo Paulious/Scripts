@@ -300,7 +300,7 @@ function Test-TapUser {
     if ($CheckExistingTap) {
         try {
             $ex = @(Invoke-WithRetry { Get-MgUserAuthenticationTemporaryAccessPassMethod -UserId $u.Id -ErrorAction Stop })
-            if ($ex.Count -gt 0) { $r.ExistingTap = $true; $r.Status = 'Warning'; $r.Detail = 'User already has a TAP (will fail unless "replace existing" is ticked)' }
+            if ($ex.Count -gt 0) { $r.ExistingTap = $true; $r.Status = 'Warning'; $r.Detail = 'User already has a TAP - creating a new one will replace it' }
         }
         catch { if ((Get-ErrorStatusCode $_) -eq 403) { $r.Status = 'Warning'; $r.Detail = 'OK, but could not check for an existing TAP (403)' } }
     }
@@ -317,7 +317,7 @@ function Get-FriendlyTapError {
         404 { 'User not found.' }
         429 { 'Throttled by Microsoft Graph and retries were exhausted.' }
         401 { 'Session expired or token rejected - sign in again.' }
-        400 { if ($raw -match '(?i)policy|not enabled|disabled|scope|target') { 'TAP is not enabled for this user in the Authentication methods policy.' } elseif ($raw -match '(?i)exist') { 'User already has a Temporary Access Pass.' } else { 'Request rejected by Graph.' } }
+        400 { if ($raw -match '(?i)policy|not enabled|disabled|scope|target') { 'TAP is not enabled for this user in the Authentication methods policy.' } else { 'Request rejected by Graph.' } }
         default { 'Unexpected Graph error.' }
     }
     [pscustomobject]@{ Status = $code; Message = "$hint [$raw]" }
@@ -330,17 +330,10 @@ function New-TapForUser {
         [Parameter(Mandatory)][int]$LifetimeMinutes,
         [bool]$OneTime = $false,
         [Nullable[datetime]]$StartUtc,
-        [bool]$ReplaceExisting = $false,
         $Cancel
     )
     Initialize-TapGraphModule
     Update-TapGraphToken
-    if ($ReplaceExisting) {
-        foreach ($old in @(Invoke-WithRetry -Cancel $Cancel { Get-MgUserAuthenticationTemporaryAccessPassMethod -UserId $UserId -ErrorAction Stop })) {
-            Invoke-WithRetry -Cancel $Cancel { Remove-MgUserAuthenticationTemporaryAccessPassMethod -UserId $UserId -TemporaryAccessPassAuthenticationMethodId $old.Id -ErrorAction Stop }
-            Write-AppLog -Level Audit -Category Generation -Message "Existing TAP removed for $UserId"
-        }
-    }
     $body = @{ lifetimeInMinutes = $LifetimeMinutes; isUsableOnce = $OneTime }
     if ($StartUtc) { $body.startDateTime = ([datetime]$StartUtc).ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'") }
     $resp = Invoke-WithRetry -Cancel $Cancel { New-MgUserAuthenticationTemporaryAccessPassMethod -UserId $UserId -BodyParameter $body -ErrorAction Stop }
@@ -366,7 +359,6 @@ function Invoke-TapValidationBatch {
     param(
         [Parameter(Mandatory)][object[]]$Users,
         [int]$LifetimeMinutes = 60, [bool]$OneTime = $false, [Nullable[datetime]]$StartUtc,
-        [bool]$ReplaceExisting = $false,
         [Parameter(Mandatory)][scriptblock]$Emit, $Cancel
     )
     $perm = Test-TapPermission
@@ -409,13 +401,12 @@ function Invoke-TapGenerationBatch {
     param(
         [Parameter(Mandatory)][object[]]$Users,
         [Parameter(Mandatory)][int]$LifetimeMinutes, [bool]$OneTime = $false, [Nullable[datetime]]$StartUtc,
-        [bool]$ReplaceExisting = $false,
         [int]$PolicyLength = 0, [bool]$RestorePolicyLength = $true,
         [Parameter(Mandatory)][scriptblock]$Emit, $Cancel
     )
     $total = @($Users).Count; $i = 0; $ok = 0; $bad = 0; $authFails = 0; $sw = [Diagnostics.Stopwatch]::StartNew()
     $oldLen = $null
-    Write-AppLog -Level Audit -Category Generation -Message ("Batch started: {0} user(s), lifetime {1}, one-time {2}, delayed start {3}, replace existing {4}" -f $total, (Format-Lifetime $LifetimeMinutes), $OneTime, [bool]$StartUtc, $ReplaceExisting)
+    Write-AppLog -Level Audit -Category Generation -Message ("Batch started: {0} user(s), lifetime {1}, one-time {2}, delayed start {3}" -f $total, (Format-Lifetime $LifetimeMinutes), $OneTime, [bool]$StartUtc)
     try {
         if ($PolicyLength -gt 0) {
             $oldLen = Set-TapPolicyLength -Length $PolicyLength
@@ -425,7 +416,7 @@ function Invoke-TapGenerationBatch {
             if ($Cancel -and $Cancel.Cancel) { & $Emit 'cancelled' @{}; break }
             $i++
             try {
-                $t = New-TapForUser -UserId $u.Id -LifetimeMinutes $LifetimeMinutes -OneTime $OneTime -StartUtc $StartUtc -ReplaceExisting $ReplaceExisting -Cancel $Cancel
+                $t = New-TapForUser -UserId $u.Id -LifetimeMinutes $LifetimeMinutes -OneTime $OneTime -StartUtc $StartUtc -Cancel $Cancel
                 $ok++; $authFails = 0
                 Write-AppLog -Level Success -Category Generation -Message "$($u.UserPrincipalName): TAP created (length $($t.TapLength), $(Format-Lifetime $t.LifetimeMinutes), one-time $($t.OneTimeUse))"
                 & $Emit 'tap' @{ Upn = $u.UserPrincipalName; DisplayName = $u.DisplayName; Tap = $t }

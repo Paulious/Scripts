@@ -124,6 +124,7 @@ For partners using GDAP, the relationship must include one of those roles. PIM-e
 - TAP length is policy-level (see above).
 - Users are validated one by one with `Get-MgUser`. For several thousand users validation takes a while. It is steady and throttle-safe rather than fast.
 - TAP creation is deliberately sequential. Graph throttles writes per tenant, so parallel calls would only trigger 429s.
+- A user can only have one usable TAP. Creating a new one replaces the old one (Microsoft's behaviour). Validation flags these users as a warning and the confirmation prompt counts them.
 - A TAP can only be created if the tenant policy allows the lifetime you pick. Default tenant policy is 1 hour minimum, 8 hours maximum, so `30 minutes`, `24 hours` and `7 days` will be rejected until the policy range is widened. The pre-flight check tells you before anything is created.
 - If the Graph sign-in is not visible to the worker thread on your machine, the app switches itself to "compatibility mode" and runs Graph calls on the UI thread (window may pause briefly). You will see a note on the sign-in screen.
 - "Clear from memory" is best effort. See `docs/SECURITY.md`.

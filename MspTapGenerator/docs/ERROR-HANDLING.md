@@ -24,7 +24,6 @@
 | 403 | Signed-in admin needs Authentication Administrator (or Privileged Authentication Administrator for admin users) |
 | 404 | User not found |
 | 400, policy wording | TAP is not enabled for this user in the Authentication methods policy |
-| 400, "exists" wording | User already has a Temporary Access Pass (tick "Replace an existing TAP") |
 | 429 exhausted | Throttled by Graph and retries were used up. Retry failures later |
 | 401 | Session expired. Sign in again |
 

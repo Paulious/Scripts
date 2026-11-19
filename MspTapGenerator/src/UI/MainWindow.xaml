@@ -349,7 +349,6 @@
               <CheckBox x:Name="DelayCheck" Content="Delay activation (local time)" Margin="0,12,0,5"/>
               <TextBox x:Name="StartBox" IsEnabled="False" ToolTip="yyyy-MM-dd HH:mm  (your local time)"/>
               <TextBlock x:Name="StartHint" Style="{StaticResource Muted}" FontSize="11.5" Text="Format: yyyy-MM-dd HH:mm"/>
-              <CheckBox x:Name="ReplaceCheck" Content="Replace an existing TAP (deletes it first)" Margin="0,12,0,5"/>
               <Label Content="Ticket / change reference (written to the audit log)"/><TextBox x:Name="TicketBox" MaxLength="100"/>
               <Border BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,1,0,0" Margin="0,12,0,12"/>
               <Button x:Name="ValidateBtn" Content="1. Validate selected users" HorizontalAlignment="Stretch" Margin="0,0,0,8"/>
