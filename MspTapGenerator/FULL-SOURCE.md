@@ -1013,7 +1013,8 @@ function Test-TapUser {
     if ($CheckExistingTap) {
         try {
             $ex = @(Invoke-WithRetry { Get-MgUserAuthenticationTemporaryAccessPassMethod -UserId $u.Id -ErrorAction Stop })
-            if ($ex.Count -gt 0) { $r.ExistingTap = $true; $r.Status = 'Warning'; $r.Detail = 'User already has a TAP - creating a new one will replace it' }
+            $live = @($ex | Where-Object { $_.MethodUsabilityReason -notin 'Expired', 'OneTimeUsed' })   # expired / used passes are listed but harmless
+            if ($live.Count -gt 0) { $r.ExistingTap = $true; $r.Status = 'Warning'; $r.Detail = 'User already has a TAP - creating a new one will replace it' }
         }
         catch { if ((Get-ErrorStatusCode $_) -eq 403) { $r.Status = 'Warning'; $r.Detail = 'OK, but could not check for an existing TAP (403)' } }
     }
@@ -1808,6 +1809,7 @@ $script:Pool    = $null
 $script:PoolHandle = $null
 $script:Tasks   = [System.Collections.Generic.List[hashtable]]::new()
 $script:Tick    = 0
+$script:Pumping = $false
 
 $script:S = @{
     Identity = $null; CustomerName = ''; Policy = $null; Busy = $false; Cancel = $null
@@ -1954,7 +1956,13 @@ function Start-AppTask {
 }
 
 function Invoke-TaskPump {
-    # called every 100 ms on the UI thread
+    # called every 100 ms on the UI thread. A modal MessageBox inside a handler keeps the dispatcher (and this timer)
+    # running, so guard against re-entry or a task's completion handler could run twice.
+    if ($script:Pumping) { return }
+    $script:Pumping = $true
+    try { Invoke-TaskPumpCore } finally { $script:Pumping = $false }
+}
+function Invoke-TaskPumpCore {
     foreach ($t in @($script:Tasks)) {
         $item = $null; $n = 0; $finished = $false
         while ($n -lt 300 -and $t.Queue.TryDequeue([ref]$item)) {
@@ -2115,8 +2123,9 @@ function Refresh-Policy {
         param($res)
         $p = $res | Select-Object -Last 1
         $script:S.Policy = $p
+        $script:UI.OneTimeCheck.IsEnabled = $true
         if ($p.Status -eq 'Enabled') {
-            if ($p.IsUsableOnce) { $script:UI.OneTimeCheck.IsChecked = $true; $script:UI.OneTimeCheck.IsEnabled = $false } else { $script:UI.OneTimeCheck.IsEnabled = $true }
+            if ($p.IsUsableOnce) { $script:UI.OneTimeCheck.IsChecked = $true; $script:UI.OneTimeCheck.IsEnabled = $false }
             if ($p.DefaultLength -ge 8 -and -not $script:UI.ApplyLengthCheck.IsChecked) { $script:UI.LengthSlider.Value = $p.DefaultLength }
             $script:UI.LengthNote.Text = "Tenant policy currently issues $($p.DefaultLength)-character passes. Microsoft Graph has no per-pass length: tick the box to change the tenant-wide value for this batch (needs the Policy.ReadWrite.AuthenticationMethod permission)."
         }
@@ -2139,6 +2148,11 @@ function Invoke-SignOut {
     $script:UI.LoginPanel.Visibility = 'Visible'
     $script:UI.SwitchTenantBtn.IsEnabled = $false; $script:UI.SignOutBtn.IsEnabled = $false
     $script:UI.PreflightText.Text = 'Tick users in the work queue, then Validate.'
+    $script:UI.OneTimeCheck.IsEnabled = $true; $script:UI.OneTimeCheck.IsChecked = $false
+    $script:UI.ApplyLengthCheck.IsChecked = $false; $script:UI.LengthSlider.IsEnabled = $false
+    $script:UI.TicketBox.Clear(); $script:UI.Progress.Value = 0; $script:UI.ProgressText.Text = 'Idle'; $script:UI.CurrentText.Text = ''
+    $script:UI.ReadyTitle.Text = 'Ready to process'; $script:UI.FailedTitle.Text = 'Validation failures'
+    Set-LogContext -Ticket ''
     Update-Header; Update-Dashboard; Update-QueueCount; Set-Busy $false
 }
 

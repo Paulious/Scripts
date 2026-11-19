@@ -309,7 +309,8 @@ function Test-TapUser {
     if ($CheckExistingTap) {
         try {
             $ex = @(Invoke-WithRetry { Get-MgUserAuthenticationTemporaryAccessPassMethod -UserId $u.Id -ErrorAction Stop })
-            if ($ex.Count -gt 0) { $r.ExistingTap = $true; $r.Status = 'Warning'; $r.Detail = 'User already has a TAP - creating a new one will replace it' }
+            $live = @($ex | Where-Object { $_.MethodUsabilityReason -notin 'Expired', 'OneTimeUsed' })   # expired / used passes are listed but harmless
+            if ($live.Count -gt 0) { $r.ExistingTap = $true; $r.Status = 'Warning'; $r.Detail = 'User already has a TAP - creating a new one will replace it' }
         }
         catch { if ((Get-ErrorStatusCode $_) -eq 403) { $r.Status = 'Warning'; $r.Detail = 'OK, but could not check for an existing TAP (403)' } }
     }
