@@ -276,7 +276,22 @@ In `main.bicepparam`: `mcpImage = '<acr>.azurecr.io/autopilotmonitor-mcp:<tag>'`
 
 ### Step 15. Lock down (milestone M6)
 - [ ] `AutoApproveNewTenants` back to **false** (re-run the seed script with `--no-auto-approve`; it merges only that column)
-- [ ] `deployerObjectId = ''` and re-deploy (removes your temporary data-plane roles)
+- [ ] **Delete your temporary roles by hand** (a redeploy with `deployerObjectId = ''` does NOT remove them; incremental Bicep deployments never delete role assignments). Do this last, after everything else here, because the seed script and Key Vault writes need them:
+  ```powershell
+  $me = az ad signed-in-user show --query id -o tsv
+  $rg = 'rg-autopilotmonitor-prod-uks'
+  $scopes = @(
+    (az storage account show -g $rg -n stautopilotmonitorprod --query id -o tsv),
+    (az keyvault show -n kv-autopilotmonitor-prod --query id -o tsv),
+    (az keyvault show -n kv-autopilotmonitor-sign --query id -o tsv))
+  foreach ($s in $scopes) {
+    az role assignment list --assignee $me --scope $s --query "[?scope=='$s'].{role:roleDefinitionName,id:id}" -o table   # look first
+  }
+  # then, per row that is one of: Storage Table Data Contributor, Storage Blob Data Contributor,
+  # Key Vault Secrets Officer, Key Vault Certificates Officer:
+  #   az role assignment delete --ids <id>
+  ```
+  Grant a role again for the minutes you need it (secret rotation, re-seeding) and remove it after.
 - [ ] CA policy for MFA in report-only, then enforced (doc 03)
 - [ ] Budget email confirmed; 1 GB/day log cap confirmed
 - [ ] Enterprise app: *Assignment required = Yes*

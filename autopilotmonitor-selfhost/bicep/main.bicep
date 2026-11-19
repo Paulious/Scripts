@@ -196,7 +196,8 @@ module mcp 'modules/mcp.bicep' = if (deployMcp) {
 
 // ---------------------------------------------------------------- deployer (temporary) data-plane access
 // Shared-key access is disabled, so whoever seeds tables / uploads the agent / writes secrets needs
-// real data-plane roles. Remove this assignment after go-live: set deployerObjectId back to ''.
+// real data-plane roles. Remove them after go-live WITH `az role assignment delete` (docs/04 step 15):
+// setting deployerObjectId back to '' only stops creating them, an incremental deployment never deletes them.
 resource dataStorageRef 'Microsoft.Storage/storageAccounts@2023-05-01' existing = { name: nDataStorage }
 resource kvRef 'Microsoft.KeyVault/vaults@2023-07-01' existing = { name: nKv }
 

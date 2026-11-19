@@ -100,7 +100,7 @@ New-MgIdentityConditionalAccessPolicy -BodyParameter @{
 | S8 | Medium | **TLS inspection / proxies** break device auth silently. | Exclusion list in doc 05. |
 | S9 | Low | **Telemetry contains device and software inventory.** | Data stays in your subscription; tenant-delete cascade exists with a 30-day recoverable manifest (upstream docs). Add retention rules for your policy. |
 | S10 | Low | **App Insights connection string is public by design** (it ships in the portal bundle). | Expected. Never put an instrumentation *key* with ingestion rights anywhere sensitive. |
-| S11 | Low | **Deployer data-plane roles linger.** | Set `deployerObjectId = ''` and redeploy at go-live (M6). |
+| S11 | Low | **Deployer data-plane roles linger.** | **Delete them explicitly** at go-live (M6), with the `az role assignment delete` commands in doc 04 step 15. Setting `deployerObjectId = ''` and redeploying does NOT remove them: incremental Bicep deployments never delete role assignments. |
 | S12 | Info | `Security headers`: backend adds `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`, `Cache-Control: no-store` on credential endpoints; the SWA config adds a strict CSP. | The patcher keeps the CSP `connect-src` in sync with your hosts. Re-check after every upstream merge. |
 
 ### What the platform already does well (from the code)
