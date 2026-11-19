@@ -740,7 +740,7 @@ function ConvertFrom-JwtPayload {
 
 function Get-DesiredScope {
     param([bool]$PolicyRead = $true, [bool]$PolicyWrite = $false)
-    $s = [System.Collections.Generic.List[string]]::new(); $s.AddRange($script:RequiredScopes)
+    $s = [System.Collections.Generic.List[string]]::new(); $s.AddRange([string[]]$script:RequiredScopes)
     if ($PolicyRead -or $PolicyWrite) { $s.Add($script:PolicyReadScope) }
     if ($PolicyWrite) { $s.Add($script:PolicyWriteScope) }
     $s.ToArray()
@@ -2754,6 +2754,19 @@ Describe 'XLSX round trip' -Skip:(-not (Get-Module -ListAvailable ImportExcel)) 
         (Import-Excel $p).TAP | Should -Be '********'
         (Import-Excel $p).DisplayName | Should -Be "'=cmd"
         Get-XlsxSheetName $p | Should -Contain 'TAPs'
+    }
+}
+
+Describe 'Scope list' -Skip:(-not (Get-Module -ListAvailable Microsoft.Graph.Authentication)) {
+    BeforeAll { Import-Module (Join-Path $PSScriptRoot '..\src\Modules\MspTap.Graph\MspTap.Graph.psm1') -Force }
+    It 'always requests the four required scopes' {
+        $s = Get-DesiredScope -PolicyRead $false -PolicyWrite $false
+        $s | Should -Contain 'UserAuthenticationMethod.ReadWrite.All'
+        $s.Count | Should -Be 4
+    }
+    It 'adds policy scopes only when asked' {
+        (Get-DesiredScope -PolicyRead $true -PolicyWrite $false) | Should -Contain 'Policy.Read.All'
+        (Get-DesiredScope -PolicyRead $false -PolicyWrite $true) | Should -Contain 'Policy.ReadWrite.AuthenticationMethod'
     }
 }
 ~~~~

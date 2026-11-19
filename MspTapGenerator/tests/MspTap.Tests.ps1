@@ -95,3 +95,16 @@ Describe 'XLSX round trip' -Skip:(-not (Get-Module -ListAvailable ImportExcel)) 
         Get-XlsxSheetName $p | Should -Contain 'TAPs'
     }
 }
+
+Describe 'Scope list' -Skip:(-not (Get-Module -ListAvailable Microsoft.Graph.Authentication)) {
+    BeforeAll { Import-Module (Join-Path $PSScriptRoot '..\src\Modules\MspTap.Graph\MspTap.Graph.psm1') -Force }
+    It 'always requests the four required scopes' {
+        $s = Get-DesiredScope -PolicyRead $false -PolicyWrite $false
+        $s | Should -Contain 'UserAuthenticationMethod.ReadWrite.All'
+        $s.Count | Should -Be 4
+    }
+    It 'adds policy scopes only when asked' {
+        (Get-DesiredScope -PolicyRead $true -PolicyWrite $false) | Should -Contain 'Policy.Read.All'
+        (Get-DesiredScope -PolicyRead $false -PolicyWrite $true) | Should -Contain 'Policy.ReadWrite.AuthenticationMethod'
+    }
+}

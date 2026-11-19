@@ -35,7 +35,7 @@ function ConvertFrom-JwtPayload {
 
 function Get-DesiredScope {
     param([bool]$PolicyRead = $true, [bool]$PolicyWrite = $false)
-    $s = [System.Collections.Generic.List[string]]::new(); $s.AddRange($script:RequiredScopes)
+    $s = [System.Collections.Generic.List[string]]::new(); $s.AddRange([string[]]$script:RequiredScopes)
     if ($PolicyRead -or $PolicyWrite) { $s.Add($script:PolicyReadScope) }
     if ($PolicyWrite) { $s.Add($script:PolicyWriteScope) }
     $s.ToArray()
