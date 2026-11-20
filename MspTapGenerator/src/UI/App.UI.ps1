@@ -321,8 +321,13 @@ function Refresh-Policy {
         $p = $res | Select-Object -Last 1
         $script:S.Policy = $p
         $script:UI.OneTimeCheck.IsEnabled = $true
+        $script:UI.OneTimeCheck.Content = 'One-time use'; $script:UI.OneTimeCheck.ToolTip = $null
         if ($p.Status -eq 'Enabled') {
-            if ($p.IsUsableOnce) { $script:UI.OneTimeCheck.IsChecked = $true; $script:UI.OneTimeCheck.IsEnabled = $false }
+            if ($p.IsUsableOnce) {
+                $script:UI.OneTimeCheck.IsChecked = $true; $script:UI.OneTimeCheck.IsEnabled = $false
+                $script:UI.OneTimeCheck.Content = 'One-time use (required by this tenant''s policy)'
+                $script:UI.OneTimeCheck.ToolTip = 'The Temporary Access Pass policy has "Require one-time use" = Yes, so every pass in this tenant is one-time. To allow reusable passes, change it in Entra admin centre > Protection > Authentication methods > Temporary Access Pass, then click Refresh policy on the Dashboard.'
+            }
             if ($p.DefaultLength -ge 8 -and -not $script:UI.ApplyLengthCheck.IsChecked) { $script:UI.LengthSlider.Value = $p.DefaultLength }
             $script:UI.LengthNote.Text = "Tenant policy currently issues $($p.DefaultLength)-character passes. Microsoft Graph has no per-pass length: tick the box to change the tenant-wide value for this batch (needs the Policy.ReadWrite.AuthenticationMethod permission)."
         }
@@ -346,6 +351,7 @@ function Invoke-SignOut {
     $script:UI.SwitchTenantBtn.IsEnabled = $false; $script:UI.SignOutBtn.IsEnabled = $false
     $script:UI.PreflightText.Text = 'Tick users in the work queue, then Validate.'
     $script:UI.OneTimeCheck.IsEnabled = $true; $script:UI.OneTimeCheck.IsChecked = $false
+    $script:UI.OneTimeCheck.Content = 'One-time use'; $script:UI.OneTimeCheck.ToolTip = $null
     $script:UI.ApplyLengthCheck.IsChecked = $false; $script:UI.LengthSlider.IsEnabled = $false
     $script:UI.TicketBox.Clear(); $script:UI.Progress.Value = 0; $script:UI.ProgressText.Text = 'Idle'; $script:UI.CurrentText.Text = ''
     $script:UI.ReadyTitle.Text = 'Ready to process'; $script:UI.FailedTitle.Text = 'Validation failures'

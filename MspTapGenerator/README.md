@@ -89,6 +89,7 @@ Run tests on their own: `Invoke-Pester .\tests`
 | Message | Fix |
 |---|---|
 | `Assembly with same name is already loaded` (Microsoft.Graph.Authentication) | More than one Graph SDK version is installed, or this window already loaded a different one. Run `.\Install-Prerequisites.ps1` (it aligns all five modules to one version), then start the app from a **new** `pwsh -NoProfile` window. Add `-RemoveOtherGraphVersions` to clean up old versions (this affects your other Graph scripts). |
+| One-time use is ticked and greyed out | The tenant's TAP policy has "Require one-time use" = Yes. Every pass in that tenant is one-time. To allow reusable passes, set it to No in Entra admin centre > Protection > Authentication methods > Temporary Access Pass, then click **Refresh policy** on the Dashboard. |
 | Window never opens / script blocked | `Unblock-File` on the files, or `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser`. |
 
 ## Using it
