@@ -7,6 +7,7 @@
 .DESCRIPTION
     pagination-signing-key       random; signs pagination cursors and push topic HMACs (PaginationTokenSigningKey)
     ops-alert-webhook-secret     random; the Azure Monitor alert webhook is FAIL-CLOSED without it (OpsAlertWebhookSecret)
+    oauth-state-signing-key      random; the MCP server will not start without it (OAuthStateSigningKey). Rotating it invalidates MCP client registrations, so clients must sign in again.
     signalr-connection-string    read from the SignalR resource; the backend has no managed-identity path for SignalR
 
     Values are generated in memory and passed by file, never printed.
@@ -45,7 +46,7 @@ function New-RandomSecret([int] $Bytes = 48) {
     $b = [byte[]]::new($Bytes); [Security.Cryptography.RandomNumberGenerator]::Fill($b); [Convert]::ToBase64String($b)
 }
 
-foreach ($n in 'pagination-signing-key', 'ops-alert-webhook-secret') {
+foreach ($n in 'pagination-signing-key', 'ops-alert-webhook-secret', 'oauth-state-signing-key') {
     if ((Test-KvSecret $n) -and -not $Rotate) { Write-Host "  exists, keeping $n"; continue }
     if ($PSCmdlet.ShouldProcess($n, 'Create random secret')) { Set-KvSecret $n (New-RandomSecret) }
 }

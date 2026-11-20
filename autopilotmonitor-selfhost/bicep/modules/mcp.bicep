@@ -88,6 +88,7 @@ var baseEnv = [
   { name: 'MCP_PUBLIC_URL', value: publicUrl }
   { name: 'AUTOPILOT_ENTRA_CLIENT_ID', value: entraClientId }
   { name: 'AUTOPILOT_ENTRA_CLIENT_SECRET', secretRef: 'entra-client-secret' }
+  { name: 'OAuthStateSigningKey', secretRef: 'oauth-state-signing-key' }
 ]
 // Hosts allowed as OAuth redirect targets: the default (claude.ai, chatgpt.com, vscode.dev, loopback) is
 // already right. Only add MCP_ALLOWED_REDIRECT_HOSTS to ALLOW a self-hosted AI client.
@@ -120,6 +121,12 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'entra-client-secret'
           keyVaultUrl: '${kv.properties.vaultUri}secrets/entra-client-secret'
+          identity: uami.id
+        }
+        {
+          // HMAC key for signed OAuth client ids and state. The server refuses to boot in production without it.
+          name: 'oauth-state-signing-key'
+          keyVaultUrl: '${kv.properties.vaultUri}secrets/oauth-state-signing-key'
           identity: uami.id
         }
       ]
